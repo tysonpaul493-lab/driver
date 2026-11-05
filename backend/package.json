@@ -1,0 +1,31 @@
+{
+  "name": "liferoute-driver-backend",
+  "version": "1.0.0",
+  "description": "LifeRoute Ambulance Driver Dispatch & Telemetry API & WebSocket Server",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "test:flow": "node test_flow.js"
+  },
+  "keywords": [
+    "liferoute",
+    "driver",
+    "ambulance",
+    "dispatch",
+    "telemetry",
+    "rest-api",
+    "websockets"
+  ],
+  "author": "LifeRoute Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.18.0"
+  }
+}
+
