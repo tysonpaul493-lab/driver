@@ -1,9 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "git config --global --add safe.directory '*' && if [ ! -d 'flutter' ]; then git clone https://github.com/flutter/flutter.git -b stable --depth 1 flutter; fi && ./flutter/bin/flutter config --no-analytics --enable-web && cd frontend && ../flutter/bin/flutter pub get",
-  "buildCommand": "cd frontend && ../flutter/bin/flutter build web --release --no-pub",
-  "outputDirectory": "frontend/build/web",
+  "outputDirectory": "frontend/public",
   "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

@@ -41,6 +41,17 @@ class ApiConstants {
       _customServerHost ?? _runtimeFallbackHost ?? _detectedHost;
   static bool get hasCustomServerHost => _customServerHost != null;
 
+  /// User-friendly label of the current server endpoint for notifications and error messages
+  static String get displayServerEndpoint {
+    if (kIsWeb && !hasCustomServerHost && configuredApiUrl.isEmpty) {
+      return 'Cloudflare Dispatch Gateway';
+    }
+    if (effectiveHost.startsWith('http://') || effectiveHost.startsWith('https://')) {
+      return effectiveHost.replaceAll(RegExp(r'^https?://'), '');
+    }
+    return '$effectiveHost:8000';
+  }
+
   /// Ordered unique list of candidate backend hosts for automatic connection resolution.
   static List<String> get candidateHosts {
     if (kIsWeb) {
@@ -48,6 +59,7 @@ class ApiConstants {
         if (_customServerHost != null && _customServerHost!.isNotEmpty)
           _customServerHost!
         else ...[
+          _kDefaultLiveWebBackend,
           'localhost',
           if (fallbackLanHost.isNotEmpty && fallbackLanHost != 'localhost')
             fallbackLanHost,

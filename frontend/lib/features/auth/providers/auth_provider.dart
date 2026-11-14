@@ -234,7 +234,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } on ApiException catch (e) {
       final msg = e.isNetworkError
-          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000). Check connection.'
+          ? 'Cannot reach dispatch server (${ApiConstants.displayServerEndpoint}). Check connection.'
           : (e.firstErrorMessage.isNotEmpty
               ? e.firstErrorMessage
               : 'Invalid mobile number or password.');
@@ -345,7 +345,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } on ApiException catch (e) {
       final msg = e.isNetworkError
-          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000). Check backend or tap the server icon at top-right.'
+          ? 'Cannot reach dispatch server (${ApiConstants.displayServerEndpoint}). Check backend or tap the server icon at top-right.'
           : (e.firstErrorMessage.isNotEmpty
                 ? e.firstErrorMessage
                 : 'Unable to send SMS verification code to $formattedPhone.');
@@ -394,7 +394,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } on ApiException catch (e) {
       final msg = e.isNetworkError
-          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000) to verify OTP. Check your connection and try again.'
+          ? 'Cannot reach dispatch server (${ApiConstants.displayServerEndpoint}) to verify OTP. Check your connection and try again.'
           : (e.firstErrorMessage.isNotEmpty
                 ? e.firstErrorMessage
                 : 'Invalid verification code');
