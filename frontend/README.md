@@ -37,3 +37,4 @@ flutter run -d <device_id> --dart-define=DEFAULT_LAN_HOST=<your_server_ip>
 On the Login screen:
 - Click **"Emergency Dispatch Server Settings"** at the bottom to configure your backend IP/hostname.
 - Or pass at build time: `--dart-define=DEFAULT_API_URL=https://your-api.com/api/v1`
+
