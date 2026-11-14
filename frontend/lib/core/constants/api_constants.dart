@@ -20,8 +20,13 @@ class ApiConstants {
     'DEFAULT_LAN_HOST',
     defaultValue: '192.168.0.112',
   );
+  static const String configuredApiUrl = String.fromEnvironment(
+    'DEFAULT_API_URL',
+    defaultValue: '',
+  );
 
   static String? _customServerHost;
+  static String? _customFullBaseUrl;
   static String? _runtimeFallbackHost;
 
   /// Effective server IP/hostname for both REST API and live WebSocket dispatch
@@ -35,8 +40,11 @@ class ApiConstants {
       return [
         if (_customServerHost != null && _customServerHost!.isNotEmpty)
           _customServerHost!
-        else
+        else ...[
           'localhost',
+          if (fallbackLanHost.isNotEmpty && fallbackLanHost != 'localhost')
+            fallbackLanHost,
+        ],
       ];
     }
 
@@ -76,25 +84,70 @@ class ApiConstants {
     final trimmed = rawHost?.trim() ?? '';
     if (trimmed.isEmpty) {
       _customServerHost = null;
+      _customFullBaseUrl = null;
       _runtimeFallbackHost = null;
       return;
     }
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      var url = trimmed;
+      if (url.endsWith('/')) {
+        url = url.substring(0, url.length - 1);
+      }
+      if (!url.endsWith('/api/v1') && !url.endsWith('/api')) {
+        url = '$url/api/v1';
+      }
+      _customFullBaseUrl = url;
+
+      var cleaned = trimmed.replaceAll(RegExp(r'^https?://', caseSensitive: false), '');
+      cleaned = cleaned.split('/').first.trim();
+      if (cleaned.contains(':')) {
+        cleaned = cleaned.split(':').first.trim();
+      }
+      _customServerHost = cleaned.isEmpty ? null : cleaned;
+      _runtimeFallbackHost = null;
+      return;
+    }
+
     var cleaned = trimmed.replaceAll(RegExp(r'^https?://', caseSensitive: false), '');
     cleaned = cleaned.split('/').first.trim();
     if (cleaned.contains(':')) {
       cleaned = cleaned.split(':').first.trim();
     }
     _customServerHost = cleaned.isEmpty ? null : cleaned;
+    _customFullBaseUrl = null;
     _runtimeFallbackHost = null;
   }
 
   /// Build base API URL for an explicit host
-  static String baseUrlForHost(String host) => 'http://$host:8000/api/v1';
+  static String baseUrlForHost(String host) {
+    if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
+      return _customFullBaseUrl!;
+    }
+    if (configuredApiUrl.isNotEmpty) {
+      return configuredApiUrl;
+    }
+    if (host.startsWith('http://') || host.startsWith('https://')) {
+      var url = host;
+      if (url.endsWith('/')) url = url.substring(0, url.length - 1);
+      if (!url.endsWith('/api/v1') && !url.endsWith('/api')) url = '$url/api/v1';
+      return url;
+    }
+    return 'http://$host:8000/api/v1';
+  }
 
   // Configurable base URL (can be customized in-app via Server Connection settings)
   // For USB debugging use 127.0.0.1 with adb reverse
   // For multi-device Wi-Fi LAN use PC LAN IP e.g. 192.168.0.112
-  static String get defaultBaseUrl => baseUrlForHost(effectiveHost);
+  static String get defaultBaseUrl {
+    if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
+      return _customFullBaseUrl!;
+    }
+    if (configuredApiUrl.isNotEmpty) {
+      return configuredApiUrl;
+    }
+    return baseUrlForHost(effectiveHost);
+  }
 
   // Indian Emergency Dispatch & Ambulance Control Numbers
   static const String nationalAmbulanceEmergencyNumber = '108';

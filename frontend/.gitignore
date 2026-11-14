@@ -1,0 +1,14 @@
+# General
+.DS_Store
+.idea/
+*.iml
+*.log
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+flutter/

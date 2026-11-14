@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
+import '../../../shared/widgets/server_settings_dialog.dart';
 import '../providers/auth_provider.dart';
 import 'driver_registration_screen.dart';
 
@@ -66,6 +67,11 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         SnackBar(
           content: Text(err),
           backgroundColor: AppColors.emergencyRed,
+          action: SnackBarAction(
+            label: 'Server IP',
+            textColor: Colors.white,
+            onPressed: () => showDriverServerSettingsDialog(context, ref),
+          ),
         ),
       );
     }
@@ -524,11 +530,15 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                 ),
 
                 const SizedBox(height: 16),
-                const Center(
-                  child: Text(
-                    'Emergency Ambulance Pilot Dispatch Console',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () => showDriverServerSettingsDialog(context, ref),
+                    icon: const Icon(Icons.tune_rounded, size: 14, color: AppColors.textMuted),
+                    label: const Text(
+                      'Emergency Dispatch Server Settings',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
                   ),
                 ),
 
