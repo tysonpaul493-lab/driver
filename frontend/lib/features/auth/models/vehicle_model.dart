@@ -56,24 +56,18 @@ class VehicleModel {
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
     return VehicleModel(
       id: json['id'] as int?,
-      registrationNumber: json['registration_number'] as String? ?? 'AMB-0000',
+      registrationNumber: json['registration_number'] as String? ?? '',
       vehicleType: VehicleType.fromString(json['vehicle_type'] as String?),
-      makeModel: json['make_model'] as String? ?? 'Standard Ambulance',
+      makeModel: json['make_model'] as String? ?? '',
       year: json['year'] as int? ?? 2024,
       equipmentList: json['equipment_list'] != null
           ? List<String>.from(json['equipment_list'] as List)
-          : [
-              'Oxygen Cylinder & Mask',
-              'Automated External Defibrillator (AED)',
-              'Stretcher with Spine Board',
-              'Emergency First Aid Kit',
-              'Suction Machine',
-            ],
-      operatorAffiliation: json['operator_affiliation'] as String? ?? 'Independent Emergency Fleet',
-      permitNumber: json['permit_number'] as String? ?? 'N/A',
-      permitExpiryDate: json['permit_expiry_date'] as String? ?? 'N/A',
-      insurancePolicyNumber: json['insurance_policy_number'] as String? ?? 'N/A',
-      insuranceExpiryDate: json['insurance_expiry_date'] as String? ?? 'N/A',
+          : const <String>[],
+      operatorAffiliation: json['operator_affiliation'] as String? ?? '',
+      permitNumber: json['permit_number'] as String? ?? '',
+      permitExpiryDate: json['permit_expiry_date'] as String? ?? '',
+      insurancePolicyNumber: json['insurance_policy_number'] as String? ?? '',
+      insuranceExpiryDate: json['insurance_expiry_date'] as String? ?? '',
       isEligible: json['is_eligible'] as bool? ?? true,
     );
   }

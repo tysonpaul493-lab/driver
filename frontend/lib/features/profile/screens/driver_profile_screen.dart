@@ -515,7 +515,7 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
                       TextButton(
                         onPressed: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const DocumentUploadScreen()),
+                            MaterialPageRoute(builder: (_) => const DocumentUploadScreen(fromProfile: true)),
                           ).then((_) => _loadDocumentPaths());
                         },
                         child: const Text('Manage', style: TextStyle(color: AppColors.ambulanceTeal)),
@@ -622,7 +622,7 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
                             ElevatedButton.icon(
                               onPressed: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (_) => const DocumentUploadScreen()),
+                                  MaterialPageRoute(builder: (_) => const DocumentUploadScreen(fromProfile: true)),
                                 ).then((_) => _loadDocumentPaths());
                               },
                               style: ElevatedButton.styleFrom(

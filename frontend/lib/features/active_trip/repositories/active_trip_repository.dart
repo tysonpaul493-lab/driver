@@ -54,29 +54,40 @@ class ActiveTripRepository {
       }
       return updated;
     } catch (_) {
-      // In offline demo mode, advance the trip locally
       if (newStatus.isFinished) {
         await _storageService.setActiveBookingId(null);
       }
-      return TripModel(
-        id: tripId,
-        bookingReference: 'BK-89241',
-        pickupAddress: 'Flat 402, Sunrise Towers, MG Road',
-        pickupLandmark: 'Near Metro Pillar #142',
-        pickupLatitude: latitude ?? 12.9716,
-        pickupLongitude: longitude ?? 77.5946,
-        destinationHospital: 'Apollo Emergency & Trauma Care',
-        destinationAddress: '154 Bannerghatta Main Rd',
-        destinationLatitude: 12.9081,
-        destinationLongitude: 77.6006,
-        emergencyNotes: 'Critical emergency care in transit.',
-        specialAccessInstructions: 'Gate 2 security cleared.',
-        emergencyCategory: 'Critical',
-        status: newStatus,
-        distanceRemainingMeters: 1200.0,
-        etaRemaining: '4 mins',
-        acceptedAt: DateTime.now(),
+      rethrow;
+    }
+  }
+
+  /// Fetch real-time chat history for an active trip
+  Future<List<Map<String, dynamic>>> getChatMessages(int tripId) async {
+    try {
+      final response = await _dioClient.get('/bookings/$tripId/chat');
+      final list = response['messages'] as List? ?? [];
+      return list.whereType<Map<String, dynamic>>().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Send a chat reply from the ambulance driver to the requester
+  Future<Map<String, dynamic>?> sendChatMessage(int tripId, String message) async {
+    try {
+      final response = await _dioClient.post(
+        '/bookings/$tripId/chat',
+        data: {
+          'sender': 'driver',
+          'message': message.trim(),
+        },
       );
+      if (response is Map<String, dynamic> && response['entry'] is Map<String, dynamic>) {
+        return response['entry'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 }

@@ -59,6 +59,17 @@ class _IncomingRequestSheetState extends ConsumerState<IncomingRequestSheet>
   @override
   Widget build(BuildContext context) {
     final requestsState = ref.watch(requestsProvider);
+
+    ref.listen<RequestsState>(requestsProvider, (prev, next) {
+      if (next.currentIncomingRequest == null ||
+          next.currentIncomingRequest?.id != widget.request.id ||
+          next.conflictMessage != null) {
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      }
+    });
+
     final progress = _remainingSeconds / widget.request.countdownSeconds;
     final screenHeight = MediaQuery.of(context).size.height;
 
@@ -160,7 +171,13 @@ class _IncomingRequestSheetState extends ConsumerState<IncomingRequestSheet>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              widget.request.patientName ?? 'Emergency Patient',
+                              (widget.request.patientName != null &&
+                                      widget.request.patientName!.trim().isNotEmpty)
+                                  ? widget.request.patientName!
+                                  : ((widget.request.patientPhone != null &&
+                                          widget.request.patientPhone!.trim().isNotEmpty)
+                                      ? widget.request.patientPhone!
+                                      : widget.request.bookingReference),
                               style: const TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 18,
@@ -540,10 +557,18 @@ class _IncomingRequestSheetState extends ConsumerState<IncomingRequestSheet>
                       height: 48,
                       isLoading: requestsState.isAccepting,
                       icon: Icons.check_circle_rounded,
-                      onPressed: () async {
-                        _timer?.cancel();
-                        await ref.read(requestsProvider.notifier).acceptRequest(widget.request.id);
-                      },
+                      onPressed: requestsState.isAccepting
+                          ? null
+                          : () async {
+                              _timer?.cancel();
+                              final nav = Navigator.of(context);
+                              final ok = await ref
+                                  .read(requestsProvider.notifier)
+                                  .acceptRequest(widget.request.id);
+                              if (ok && mounted && nav.canPop()) {
+                                nav.pop();
+                              }
+                            },
                     ),
                   ),
                 ],

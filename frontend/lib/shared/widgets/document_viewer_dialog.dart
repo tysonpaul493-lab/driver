@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
@@ -36,7 +37,11 @@ class DocumentViewerDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasValidFile = imagePath != null &&
         imagePath!.isNotEmpty &&
-        File(imagePath!).existsSync();
+        (kIsWeb
+            ? (imagePath!.startsWith('blob:') ||
+                imagePath!.startsWith('http') ||
+                imagePath!.startsWith('data:'))
+            : File(imagePath!).existsSync());
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -114,11 +119,17 @@ class DocumentViewerDialog extends StatelessWidget {
                         minScale: 0.8,
                         maxScale: 5.0,
                         child: Center(
-                          child: Image.file(
-                            File(imagePath!),
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) => _buildFallbackDocumentView(),
-                          ),
+                          child: kIsWeb
+                              ? Image.network(
+                                  imagePath!,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) => _buildFallbackDocumentView(),
+                                )
+                              : Image.file(
+                                  File(imagePath!),
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) => _buildFallbackDocumentView(),
+                                ),
                         ),
                       )
                     : _buildFallbackDocumentView(),

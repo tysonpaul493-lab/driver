@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../constants/storage_keys.dart';
 
 /// Secure Storage and persistent preferences service
@@ -9,7 +11,7 @@ class SecureStorageService {
   SharedPreferences? _prefs;
 
   SecureStorageService({FlutterSecureStorage? secureStorage})
-      : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+    : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -67,17 +69,6 @@ class SecureStorageService {
     return _prefs?.getBool(StorageKeys.isOnline) ?? false;
   }
 
-  // FCM Device Token
-  Future<void> saveFcmToken(String token) async {
-    await init();
-    await _prefs?.setString(StorageKeys.fcmToken, token);
-  }
-
-  Future<String?> getFcmToken() async {
-    await init();
-    return _prefs?.getString(StorageKeys.fcmToken);
-  }
-
   // Active Booking ID (Crash Recovery)
   Future<void> setActiveBookingId(String? bookingId) async {
     await init();
@@ -117,7 +108,10 @@ class SecureStorageService {
     return digits;
   }
 
-  Future<void> saveRegisteredDriverByPhone(String phone, Map<String, dynamic> profile) async {
+  Future<void> saveRegisteredDriverByPhone(
+    String phone,
+    Map<String, dynamic> profile,
+  ) async {
     await init();
     final clean = _normalizePhone(phone);
     final rawDigits = phone.replaceAll(RegExp(r'[^0-9]'), '');
@@ -198,7 +192,15 @@ class SecureStorageService {
   Future<void> saveCompletedTrip(Map<String, dynamic> trip) async {
     await init();
     final existing = await getCompletedTrips();
-    // Add to beginning of list
+    final ref = trip['booking_reference']?.toString();
+    final id = trip['id']?.toString();
+    existing.removeWhere(
+      (t) =>
+          (ref != null &&
+              ref.isNotEmpty &&
+              t['booking_reference']?.toString() == ref) ||
+          (id != null && id.isNotEmpty && t['id']?.toString() == id),
+    );
     existing.insert(0, trip);
     await _prefs?.setString('completed_trips_history', jsonEncode(existing));
   }
@@ -206,9 +208,12 @@ class SecureStorageService {
   Future<void> updateCompletedTrip(Map<String, dynamic> updatedTrip) async {
     await init();
     final existing = await getCompletedTrips();
-    final index = existing.indexWhere((t) =>
-        (updatedTrip['booking_reference'] != null && t['booking_reference'] == updatedTrip['booking_reference']) ||
-        (updatedTrip['id'] != null && t['id'] == updatedTrip['id']));
+    final index = existing.indexWhere(
+      (t) =>
+          (updatedTrip['booking_reference'] != null &&
+              t['booking_reference'] == updatedTrip['booking_reference']) ||
+          (updatedTrip['id'] != null && t['id'] == updatedTrip['id']),
+    );
     if (index >= 0) {
       existing[index] = updatedTrip;
     } else {
@@ -223,7 +228,18 @@ class SecureStorageService {
     if (data == null) return [];
     try {
       final list = jsonDecode(data) as List;
-      return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      final seen = <String>{};
+      final result = <Map<String, dynamic>>[];
+      for (final e in list) {
+        final map = Map<String, dynamic>.from(e as Map);
+        final ref = map['booking_reference']?.toString() ?? '';
+        final id = map['id']?.toString() ?? '';
+        final key = ref.isNotEmpty ? ref : id;
+        if (key.isEmpty || seen.add(key)) {
+          result.add(map);
+        }
+      }
+      return result;
     } catch (_) {
       return [];
     }

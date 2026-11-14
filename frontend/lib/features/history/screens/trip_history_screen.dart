@@ -19,7 +19,10 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
     final localRaw = await storage.getCompletedTrips();
     for (final raw in localRaw) {
       try {
-        items.add(TripHistoryItem.fromJson(raw));
+        final item = TripHistoryItem.fromJson(raw);
+        if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
+          items.add(item);
+        }
       } catch (_) {}
     }
   } catch (_) {}
@@ -31,103 +34,24 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
     for (final e in list) {
       try {
         final item = TripHistoryItem.fromJson(e as Map<String, dynamic>);
-        if (!items.any((x) => x.bookingReference == item.bookingReference)) {
+        if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
           items.add(item);
         }
       } catch (_) {}
     }
   } catch (_) {}
 
-  // 3. If list is empty, supply initial realistic completed dispatch records with mixed paid/unpaid states
-  if (items.isEmpty) {
-    final demoTrips = [
-      TripHistoryItem(
-        id: 101,
-        bookingReference: 'BK-94821',
-        patientName: 'Kavita Sharma',
-        patientPhone: '+91 98450 11223',
-        pickupAddress: 'Sector 4, Indiranagar, Bengaluru',
-        destinationHospital: 'Manipal Hospital ICU, HAL Old Airport Rd',
-        emergencyCategory: 'Critical',
-        distanceKm: 8.4,
-        durationMinutes: 22,
-        earnings: 450.0,
-        completedAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 15)),
-        handoverNotes: 'Patient stabilized on oxygen (5L/min). Transferred to Dr. Rao in Trauma Bay 2.',
-        isPaid: true,
-        paymentStatus: 'Paid',
-        paymentMethod: 'UPI / Online Payment',
-        ambulancePlate: 'KA 03 AL 2940',
-        status: 'Completed & Handover Signed',
-      ),
-      TripHistoryItem(
-        id: 102,
-        bookingReference: 'BK-93210',
-        patientName: 'Ramesh Patel',
-        patientPhone: '+91 97420 55431',
-        pickupAddress: '7th Cross, Koramangala 4th Block',
-        destinationHospital: 'St. John’s Medical College Hospital',
-        emergencyCategory: 'Urgent',
-        distanceKm: 5.2,
-        durationMinutes: 16,
-        earnings: 350.0,
-        completedAt: DateTime.now().subtract(const Duration(hours: 5, minutes: 40)),
-        handoverNotes: 'Fracture immobilization applied. Handover done at Emergency Reception.',
-        isPaid: false,
-        paymentStatus: 'Pending Payment',
-        paymentMethod: null,
-        ambulancePlate: 'KA 03 AL 2940',
-        status: 'Completed (Payment Pending from User)',
-      ),
-      TripHistoryItem(
-        id: 103,
-        bookingReference: 'BK-91845',
-        patientName: 'Ananya Deshmukh',
-        patientPhone: '+91 94480 99876',
-        pickupAddress: 'Brigade Road, Ashok Nagar',
-        destinationHospital: 'Apollo Speciality Hospital, Jayanagar',
-        emergencyCategory: 'Critical',
-        distanceKm: 11.6,
-        durationMinutes: 28,
-        earnings: 550.0,
-        completedAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
-        handoverNotes: 'Cardiac monitoring continuous during transit. Receiving nurse Sister Mary.',
-        isPaid: true,
-        paymentStatus: 'Paid',
-        paymentMethod: 'Government Health Card / Cashless',
-        ambulancePlate: 'KA 03 AL 2940',
-        status: 'Completed & Handover Signed',
-      ),
-      TripHistoryItem(
-        id: 104,
-        bookingReference: 'BK-89412',
-        patientName: 'Mohammad Tariq',
-        patientPhone: '+91 98860 33412',
-        pickupAddress: 'HSR Layout Sector 1, 19th Main',
-        destinationHospital: 'Narayana Multispeciality Hospital',
-        emergencyCategory: 'Standard',
-        distanceKm: 4.8,
-        durationMinutes: 14,
-        earnings: 320.0,
-        completedAt: DateTime.now().subtract(const Duration(days: 1, hours: 8)),
-        handoverNotes: 'Asthmatic distress resolved post-nebulizer. Patient walked in with attendant.',
-        isPaid: false,
-        paymentStatus: 'Unpaid',
-        paymentMethod: null,
-        ambulancePlate: 'KA 03 AL 2940',
-        status: 'Completed (Unpaid)',
-      ),
-    ];
-
-    for (final dt in demoTrips) {
-      await storage.saveCompletedTrip(dt.toJson());
-      items.add(dt);
+  // Sort descending by completion time (most recent first) and guarantee 100% unique dispatches
+  final seen = <String>{};
+  final deduped = <TripHistoryItem>[];
+  for (final item in items) {
+    final key = item.bookingReference.isNotEmpty ? item.bookingReference : item.id.toString();
+    if (seen.add(key)) {
+      deduped.add(item);
     }
   }
-
-  // Sort descending by completion time (most recent first)
-  items.sort((a, b) => b.completedAt.compareTo(a.completedAt));
-  return items;
+  deduped.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+  return deduped;
 });
 
 class TripHistoryScreen extends ConsumerWidget {
@@ -548,7 +472,15 @@ class TripHistoryScreen extends ConsumerWidget {
                                               children: [
                                                 const Icon(Icons.check_circle_rounded, color: AppColors.statusGreen),
                                                 const SizedBox(width: 8),
-                                                Text('Payment recorded! ₹${updated.earnings.toStringAsFixed(0)} is now visible in the trip bar.'),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Payment recorded! ₹${updated.earnings.toStringAsFixed(0)} is now visible in the trip bar.',
+                                                    style: const TextStyle(
+                                                      color: AppColors.textPrimary,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),
@@ -557,7 +489,7 @@ class TripHistoryScreen extends ConsumerWidget {
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.ambulanceTeal,
-                                      foregroundColor: Colors.black,
+                                      foregroundColor: Colors.white,
                                       enableFeedback: true,
                                       splashFactory: InkRipple.splashFactory,
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

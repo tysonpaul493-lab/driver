@@ -17,10 +17,47 @@ enum TripStatus {
   const TripStatus(this.apiValue, this.displayTitle, this.nextActionLabel, this.stepIndex);
 
   static TripStatus fromApi(String? val) {
-    for (final s in TripStatus.values) {
-      if (s.apiValue == val || s.name == val) return s;
+    final normalized = val?.trim().toLowerCase() ?? '';
+    switch (normalized) {
+      case 'accepted':
+      case 'driver_assigned':
+      case 'driverassigned':
+        return TripStatus.accepted;
+      case 'en_route_to_pickup':
+      case 'enroutetopickup':
+      case 'driver_approaching':
+      case 'driverapproaching':
+        return TripStatus.enRouteToPickup;
+      case 'arrived_at_pickup':
+      case 'arrivedatpickup':
+      case 'driver_arrived':
+      case 'driverarrived':
+        return TripStatus.arrivedAtPickup;
+      case 'patient_onboard':
+      case 'patientonboard':
+      case 'patient_picked_up':
+      case 'patientpickedup':
+        return TripStatus.patientOnboard;
+      case 'in_transit_to_hospital':
+      case 'intransittohospital':
+      case 'traveling_to_hospital':
+      case 'travelingtohospital':
+        return TripStatus.inTransitToHospital;
+      case 'arrived_at_hospital':
+      case 'arrivedathospital':
+        return TripStatus.arrivedAtHospital;
+      case 'completed':
+      case 'trip_completed':
+      case 'tripcompleted':
+        return TripStatus.completed;
+      case 'cancelled':
+        return TripStatus.cancelled;
+      default:
+        for (final s in TripStatus.values) {
+          if (s.apiValue == normalized || s.name.toLowerCase() == normalized) return s;
+        }
+        return TripStatus.accepted;
     }
-    return TripStatus.accepted;
   }
 
   TripStatus? get nextStatus {

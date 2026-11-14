@@ -2,7 +2,6 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../active_trip/models/trip_model.dart';
-import '../../active_trip/models/trip_status.dart';
 import '../models/booking_request_model.dart';
 
 class BookingAlreadyClaimedException implements Exception {
@@ -41,39 +40,8 @@ class RequestsRepository {
           'This emergency booking was already accepted by another ambulance or cancelled by the requester.',
         );
       }
-      if (e.isNetworkError) {
-        return _fallbackTrip(bookingId, originalRequest: originalRequest);
-      }
       rethrow;
-    } catch (_) {
-      return _fallbackTrip(bookingId, originalRequest: originalRequest);
     }
-  }
-
-  TripModel _fallbackTrip(int bookingId, {BookingRequestModel? originalRequest}) {
-    return TripModel(
-      id: bookingId,
-      bookingReference: originalRequest?.bookingReference ??
-          'BK-${DateTime.now().millisecondsSinceEpoch % 90000 + 10000}',
-      patientName: originalRequest?.patientName ?? 'Emergency Patient',
-      contactNumber: originalRequest?.patientPhone ?? '+91 98450 12345',
-      pickupAddress: originalRequest?.pickupAddress ?? 'Block C, Brigade Gateway, Malleshwaram',
-      pickupLandmark: originalRequest?.pickupLandmark ?? 'Opposite World Trade Center Gate 3',
-      pickupLatitude: originalRequest?.pickupLatitude ?? 13.0118,
-      pickupLongitude: originalRequest?.pickupLongitude ?? 77.5550,
-      destinationHospital: originalRequest?.destinationHospital ?? 'Columbia Asia Referral Hospital',
-      destinationAddress: originalRequest?.destinationAddress ?? '26/4 Brigade Gateway, Bengaluru',
-      destinationLatitude: originalRequest?.destinationLatitude ?? 13.0135,
-      destinationLongitude: originalRequest?.destinationLongitude ?? 77.5542,
-      emergencyNotes: originalRequest?.essentialInstructions ??
-          'Critical emergency. Immediate transit and oxygen required.',
-      specialAccessInstructions: 'Gate 2 security cleared for emergency entrance.',
-      emergencyCategory: originalRequest?.emergencyCategory ?? 'Critical',
-      status: TripStatus.accepted,
-      distanceRemainingMeters: originalRequest?.distanceMeters ?? 2800.0,
-      etaRemaining: '${originalRequest?.estimatedEtaMinutes ?? 6} mins',
-      acceptedAt: DateTime.now(),
-    );
   }
 
   /// Decline booking so dispatcher can route to next available ambulance

@@ -1,21 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/api_constants.dart';
-import '../storage/secure_storage_service.dart';
 
-/// Laravel Reverb WebSocket Service for real-time dispatch and trip updates
+/// Real-time WebSocket service (Reverb / Pusher JSON protocol) for dispatch and trip updates
 class ReverbService {
-  final SecureStorageService _storageService;
-  final PusherChannelsFlutter _pusher = PusherChannelsFlutter.getInstance();
-
   bool _isConnected = false;
   int? _subscribedDriverId;
   String? _subscribedBookingChannel;
+  String? _activeWsUrl;
   WebSocketChannel? _directChannel;
+  StreamSubscription<dynamic>? _directSubscription;
   Timer? _reconnectTimer;
+  Timer? _pingTimer;
 
   // Stream controllers for app events
   final _bookingRequestController = StreamController<Map<String, dynamic>>.broadcast();
@@ -23,9 +21,10 @@ class ReverbService {
   final _bookingClaimedByOtherController = StreamController<Map<String, dynamic>>.broadcast();
   final _destinationChangedController = StreamController<Map<String, dynamic>>.broadcast();
   final _dispatcherMessageController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatMessageController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionStateController = StreamController<bool>.broadcast();
 
-  ReverbService(this._storageService);
+  ReverbService();
 
   // Stream getters
   Stream<Map<String, dynamic>> get onBookingRequest => _bookingRequestController.stream;
@@ -33,93 +32,97 @@ class ReverbService {
   Stream<Map<String, dynamic>> get onBookingClaimedByOther => _bookingClaimedByOtherController.stream;
   Stream<Map<String, dynamic>> get onDestinationChanged => _destinationChangedController.stream;
   Stream<Map<String, dynamic>> get onDispatcherMessage => _dispatcherMessageController.stream;
+  Stream<Map<String, dynamic>> get onChatMessage => _chatMessageController.stream;
   Stream<bool> get onConnectionStateChanged => _connectionStateController.stream;
 
   bool get isConnected => _isConnected;
 
-  /// Connect to Laravel Reverb WebSocket Server
+  /// Connect to WebSocket server across both Web and Mobile
   Future<void> connect(int driverId) async {
-    _subscribedDriverId = driverId;
-    final token = await _storageService.getAuthToken() ?? '1|demo_driver_token';
-
-    // 1. Try Pusher client
-    try {
-      final isHttps = ApiConstants.reverbScheme.toLowerCase() == 'https';
-      await _pusher.init(
-        apiKey: ApiConstants.reverbAppKey,
-        cluster: 'mt1',
-        useTLS: isHttps,
-        authEndpoint: '${ApiConstants.defaultBaseUrl}${ApiConstants.reverbAuthEndpoint}',
-        onAuthorizer: (channelName, socketId, options) async {
-          return {
-            "auth": "",
-            "channel_data": "",
-            "shared_secret": "",
-            "headers": {
-              "Authorization": "Bearer $token",
-              "Accept": "application/json",
-            }
-          };
-        },
-        onConnectionStateChange: (currentState, previousState) {
-          debugPrint('[ReverbService Pusher] State: $previousState -> $currentState');
-          _isConnected = (currentState.toLowerCase() == 'connected');
-          _connectionStateController.add(_isConnected);
-        },
-        onError: (message, code, error) {
-          debugPrint('[ReverbService Pusher] Error: $message ($code)');
-        },
-        onSubscriptionSucceeded: (channelName, data) {
-          debugPrint('[ReverbService Pusher] Subscribed to $channelName');
-        },
-        onEvent: (event) {
-          _handlePusherEvent(event);
-        },
-      );
-
-      await _pusher.connect();
-      await subscribeToDriverChannel(driverId);
-    } catch (e) {
-      debugPrint('[ReverbService] Pusher plugin error, using direct WebSocket fallback: $e');
+    final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
+    if (_isConnected &&
+        _directChannel != null &&
+        _subscribedDriverId == driverId &&
+        _activeWsUrl == wsUrl) {
+      return;
     }
-
-    // 2. Also start universal direct WebSocket connection for instant local reliability
+    _subscribedDriverId = driverId;
     _connectDirectSocket(driverId);
   }
 
-  void _connectDirectSocket(int driverId) async {
+  /// Reconnect active WebSocket stream (e.g. after changing dispatch server host)
+  Future<void> reconnectIfActive({bool force = false}) async {
+    if (_subscribedDriverId == null) return;
+    final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
+    if (!force &&
+        _isConnected &&
+        _directChannel != null &&
+        _activeWsUrl == wsUrl) {
+      return;
+    }
+    _connectDirectSocket(_subscribedDriverId!);
+  }
+
+  void _connectDirectSocket(int driverId) {
     try {
       final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
-      debugPrint('🔌 [ReverbService] Connecting direct WebSocket: $wsUrl');
+      debugPrint('🔌 [ReverbService] Connecting WebSocket: $wsUrl');
+      _reconnectTimer?.cancel();
+      _pingTimer?.cancel();
+      final oldSubscription = _directSubscription;
+      final oldChannel = _directChannel;
+      _directSubscription = null;
+      _directChannel = null;
       try {
-        _directChannel?.sink.close();
+        oldSubscription?.cancel();
       } catch (_) {}
-      _directChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      try {
+        oldChannel?.sink.close();
+      } catch (_) {}
+
+      final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _directChannel = channel;
+      _activeWsUrl = wsUrl;
 
       _isConnected = true;
+      _reconnectAttempts = 0;
       _connectionStateController.add(true);
-      debugPrint('✅ [ReverbService] Direct WebSocket connected to $wsUrl');
+      debugPrint('✅ [ReverbService] WebSocket connected to $wsUrl');
+
+      // Keepalive heartbeat every 15s prevents NAT / mobile radio sleep drops
+      _pingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+        if (!identical(_directChannel, channel)) return;
+        try {
+          channel.sink.add(jsonEncode({'event': 'pusher:ping', 'data': {}}));
+        } catch (_) {
+          if (!identical(_directChannel, channel)) return;
+          _isConnected = false;
+          _connectionStateController.add(false);
+          _scheduleDirectReconnect(driverId);
+        }
+      });
 
       // Subscribe to driver channel and broadcast channel
       final driverChannel = ApiConstants.driverPrivateChannel(driverId);
-      _directChannel?.sink.add(jsonEncode({
+      channel.sink.add(jsonEncode({
         'event': 'pusher:subscribe',
         'data': {'channel': driverChannel},
       }));
-      _directChannel?.sink.add(jsonEncode({
+      channel.sink.add(jsonEncode({
         'event': 'pusher:subscribe',
         'data': {'channel': ApiConstants.emergencyBroadcastChannel},
       }));
 
       if (_subscribedBookingChannel != null) {
-        _directChannel?.sink.add(jsonEncode({
+        channel.sink.add(jsonEncode({
           'event': 'pusher:subscribe',
           'data': {'channel': _subscribedBookingChannel},
         }));
       }
 
-      _directChannel?.stream.listen(
+      _directSubscription = channel.stream.listen(
         (data) {
+          if (!identical(_directChannel, channel)) return;
           try {
             final parsed = jsonDecode(data.toString()) as Map<String, dynamic>;
             final eventName = parsed['event'] as String? ?? '';
@@ -135,29 +138,39 @@ class ReverbService {
               _routeEvent(eventName, parsed);
             }
           } catch (e) {
-            debugPrint('Error parsing direct WS data: $e');
+            debugPrint('Error parsing WS data: $e');
           }
         },
         onDone: () {
-          debugPrint('❌ [ReverbService] Direct WebSocket closed. Reconnecting in 5s...');
+          if (!identical(_directChannel, channel)) return;
+          debugPrint('❌ [ReverbService] WebSocket closed. Reconnecting in 5s...');
           _isConnected = false;
           _connectionStateController.add(false);
           _scheduleDirectReconnect(driverId);
         },
         onError: (e) {
-          debugPrint('⚠️ [ReverbService] Direct WebSocket error: $e');
+          if (!identical(_directChannel, channel)) return;
+          debugPrint('⚠️ [ReverbService] WebSocket error: $e');
+          _isConnected = false;
+          _connectionStateController.add(false);
           _scheduleDirectReconnect(driverId);
         },
       );
     } catch (e) {
-      debugPrint('⚠️ [ReverbService] Direct WebSocket connect error: $e');
+      debugPrint('⚠️ [ReverbService] WebSocket connect error: $e');
+      _isConnected = false;
+      _connectionStateController.add(false);
       _scheduleDirectReconnect(driverId);
     }
   }
 
+  int _reconnectAttempts = 0;
+
   void _scheduleDirectReconnect(int driverId) {
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+    _reconnectAttempts++;
+    final delaySeconds = (_reconnectAttempts <= 2) ? 1 : ((_reconnectAttempts <= 4) ? 2 : 4);
+    _reconnectTimer = Timer(Duration(seconds: delaySeconds), () {
       if (_subscribedDriverId != null) {
         _connectDirectSocket(driverId);
       }
@@ -169,13 +182,11 @@ class ReverbService {
     _subscribedDriverId = driverId;
     final channelName = ApiConstants.driverPrivateChannel(driverId);
     try {
-      await _pusher.subscribe(channelName: channelName);
+      _directChannel?.sink.add(jsonEncode({
+        'event': 'pusher:subscribe',
+        'data': {'channel': channelName},
+      }));
     } catch (_) {}
-
-    _directChannel?.sink.add(jsonEncode({
-      'event': 'pusher:subscribe',
-      'data': {'channel': channelName},
-    }));
   }
 
   /// Subscribe to active booking channel for trip changes (e.g. cancellation, hospital change)
@@ -184,45 +195,24 @@ class ReverbService {
     final channelName = ApiConstants.bookingPrivateChannel(bookingId);
     _subscribedBookingChannel = channelName;
     try {
-      await _pusher.subscribe(channelName: channelName);
+      _directChannel?.sink.add(jsonEncode({
+        'event': 'pusher:subscribe',
+        'data': {'channel': channelName},
+      }));
     } catch (_) {}
-
-    _directChannel?.sink.add(jsonEncode({
-      'event': 'pusher:subscribe',
-      'data': {'channel': channelName},
-    }));
   }
 
   /// Unsubscribe active booking channel when trip completes or cancels
   Future<void> unsubscribeBookingChannel() async {
     if (_subscribedBookingChannel != null) {
       try {
-        await _pusher.unsubscribe(channelName: _subscribedBookingChannel!);
+        _directChannel?.sink.add(jsonEncode({
+          'event': 'pusher:unsubscribe',
+          'data': {'channel': _subscribedBookingChannel},
+        }));
       } catch (_) {}
-
-      _directChannel?.sink.add(jsonEncode({
-        'event': 'pusher:unsubscribe',
-        'data': {'channel': _subscribedBookingChannel},
-      }));
       _subscribedBookingChannel = null;
     }
-  }
-
-  void _handlePusherEvent(PusherEvent event) {
-    debugPrint('[ReverbService Pusher] Event: ${event.eventName} on ${event.channelName}');
-    Map<String, dynamic> data = {};
-    if (event.data != null) {
-      try {
-        if (event.data is String) {
-          data = jsonDecode(event.data!) as Map<String, dynamic>;
-        } else if (event.data is Map) {
-          data = Map<String, dynamic>.from(event.data as Map);
-        }
-      } catch (e) {
-        debugPrint('[ReverbService] Failed to parse event payload: $e');
-      }
-    }
-    _routeEvent(event.eventName, data);
   }
 
   void _routeEvent(String eventName, Map<String, dynamic> data) {
@@ -233,7 +223,9 @@ class ReverbService {
         break;
 
       case 'BookingCancelled':
+      case 'TripCancelled':
       case 'booking-cancelled':
+      case 'trip-cancelled':
         _bookingCancelledController.add(data);
         break;
 
@@ -252,6 +244,16 @@ class ReverbService {
         _dispatcherMessageController.add(data);
         break;
 
+      case 'TripChatMessage':
+      case 'trip-chat-message':
+        _chatMessageController.add(data);
+        break;
+
+      case 'pusher:pong':
+      case 'pusher:connection_established':
+      case 'pusher_internal:subscription_succeeded':
+        break;
+
       default:
         if (eventName.contains('BookingRequested') || eventName.contains('NewBooking')) {
           _bookingRequestController.add(data);
@@ -263,6 +265,8 @@ class ReverbService {
           _destinationChangedController.add(data);
         } else if (eventName.contains('Dispatcher')) {
           _dispatcherMessageController.add(data);
+        } else if (eventName.contains('Chat')) {
+          _chatMessageController.add(data);
         }
         break;
     }
@@ -270,35 +274,44 @@ class ReverbService {
 
   /// Disconnect and cleanup subscriptions on logout
   Future<void> disconnect() async {
+    _subscribedDriverId = null;
+    _activeWsUrl = null;
     _reconnectTimer?.cancel();
+    _pingTimer?.cancel();
+    await unsubscribeBookingChannel();
+    final sub = _directSubscription;
+    final ch = _directChannel;
+    _directSubscription = null;
+    _directChannel = null;
     try {
-      if (_subscribedDriverId != null) {
-        await _pusher.unsubscribe(
-          channelName: ApiConstants.driverPrivateChannel(_subscribedDriverId!),
-        );
-      }
-      await unsubscribeBookingChannel();
-      await _pusher.disconnect();
+      await sub?.cancel();
     } catch (_) {}
-
     try {
-      _directChannel?.sink.close();
+      await ch?.sink.close();
     } catch (_) {}
-
     _isConnected = false;
     _connectionStateController.add(false);
   }
 
   void dispose() {
+    _subscribedDriverId = null;
+    _activeWsUrl = null;
     _reconnectTimer?.cancel();
+    _pingTimer?.cancel();
+    try {
+      _directSubscription?.cancel();
+    } catch (_) {}
     try {
       _directChannel?.sink.close();
     } catch (_) {}
+    _directSubscription = null;
+    _directChannel = null;
     _bookingRequestController.close();
     _bookingCancelledController.close();
     _bookingClaimedByOtherController.close();
     _destinationChangedController.close();
     _dispatcherMessageController.close();
+    _chatMessageController.close();
     _connectionStateController.close();
   }
 }

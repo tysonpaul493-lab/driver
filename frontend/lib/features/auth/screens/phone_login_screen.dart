@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/phone_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../providers/auth_provider.dart';
 import 'driver_registration_screen.dart';
-import 'otp_verification_screen.dart';
 
 class PhoneLoginScreen extends ConsumerStatefulWidget {
   final String? initialPhone;
@@ -16,8 +16,10 @@ class PhoneLoginScreen extends ConsumerStatefulWidget {
 
 class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String _selectedCountryCode = '+91';
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -36,72 +38,213 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSendOtp() async {
+  Future<void> _handlePasswordLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    final fullPhone = '$_selectedCountryCode${_phoneController.text.trim()}';
+    final fullPhone = PhoneUtils.buildInternationalPhone(
+      _selectedCountryCode,
+      _phoneController.text,
+    );
 
-    // Verify if registered as a driver
-    final isRegistered = await ref.read(authNotifierProvider.notifier).isPhoneRegistered(fullPhone);
-    if (!isRegistered) {
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: AppColors.surfaceDark,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: const [
-                Icon(Icons.warning_amber_rounded, color: AppColors.alertOrange, size: 26),
-                SizedBox(width: 8),
-                Text(
-                  'Driver Not Registered',
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            content: Text(
-              'Mobile number $fullPhone is not registered as an emergency ambulance driver. You must complete driver registration first to receive OTP.',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.4),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const DriverRegistrationScreen()),
-                  );
-                },
-                icon: const Icon(Icons.person_add_rounded, size: 18),
-                label: const Text('Register Now'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ambulanceTeal,
-                  foregroundColor: Colors.black,
-                ),
-              ),
-            ],
-          ),
+    final success = await ref
+        .read(authNotifierProvider.notifier)
+        .loginWithPassword(
+          phone: fullPhone,
+          password: _passwordController.text.trim(),
         );
-      }
-      return;
-    }
 
-    final success = await ref.read(authNotifierProvider.notifier).sendOtp(fullPhone);
-    if (success && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => OtpVerificationScreen(phoneNumber: fullPhone),
+    if (!mounted) return;
+    if (success) {
+      FocusScope.of(context).unfocus();
+    } else {
+      final err = ref.read(authNotifierProvider).errorMessage ??
+          'Invalid mobile number or password. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.emergencyRed,
         ),
       );
     }
   }
 
+  void _showForgotPasswordDialog() {
+    final resetPhoneController = TextEditingController(text: _phoneController.text);
+    final newPassController = TextEditingController();
+    final confirmPassController = TextEditingController();
+    final resetFormKey = GlobalKey<FormState>();
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isResetting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceDark,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Form(
+                key: resetFormKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Reset Password',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enter your registered mobile number and create a new password.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    TextFormField(
+                      controller: resetPhoneController,
+                      keyboardType: TextInputType.phone,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: const InputDecoration(
+                        labelText: 'Registered Mobile Number *',
+                        prefixIcon: Icon(Icons.phone_android_rounded, color: AppColors.textSecondary),
+                      ),
+                      validator: (v) {
+                        final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                        if (digits.length < 7 || digits.length > 15) {
+                          return 'Enter valid registered mobile number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: newPassController,
+                      obscureText: obscureNew,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'New Password *',
+                        hintText: 'Minimum 6 characters',
+                        prefixIcon: const Icon(Icons.lock_reset_rounded, color: AppColors.textSecondary),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNew ? Icons.visibility_off : Icons.visibility,
+                            color: AppColors.textSecondary,
+                            size: 18,
+                          ),
+                          onPressed: () => setSheetState(() => obscureNew = !obscureNew),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: confirmPassController,
+                      obscureText: obscureConfirm,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Confirm New Password *',
+                        hintText: 'Re-enter new password',
+                        prefixIcon: const Icon(Icons.lock_clock_rounded, color: AppColors.textSecondary),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirm ? Icons.visibility_off : Icons.visibility,
+                            color: AppColors.textSecondary,
+                            size: 18,
+                          ),
+                          onPressed: () => setSheetState(() => obscureConfirm = !obscureConfirm),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v != newPassController.text) {
+                          return 'Passwords do not match';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    CustomButton(
+                      label: 'Save Password & Sign In',
+                      icon: Icons.check_circle_rounded,
+                      isLoading: isResetting,
+                      onPressed: isResetting
+                          ? null
+                          : () async {
+                              if (!resetFormKey.currentState!.validate()) return;
+                              setSheetState(() => isResetting = true);
+                              final fullPhone = PhoneUtils.buildInternationalPhone(
+                                _selectedCountryCode,
+                                resetPhoneController.text,
+                              );
+                              final ok = await ref.read(authNotifierProvider.notifier).resetPassword(
+                                    phone: fullPhone,
+                                    newPassword: newPassController.text.trim(),
+                                    confirmPassword: confirmPassController.text.trim(),
+                                  );
+                              setSheetState(() => isResetting = false);
+                              if (!context.mounted) return;
+                              if (ok) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Password reset successfully! Logged in.'),
+                                    backgroundColor: AppColors.ambulanceTeal,
+                                  ),
+                                );
+                              } else {
+                                final err = ref.read(authNotifierProvider).errorMessage ??
+                                    'Failed to reset password. Please check your mobile number.';
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(err),
+                                    backgroundColor: AppColors.emergencyRed,
+                                  ),
+                                );
+                              }
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +253,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -183,7 +327,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Enter your registered mobile number to receive a 6-digit secure login OTP.',
+                  'Enter your registered mobile number and password to sign in.',
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 14,
@@ -245,10 +389,11 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                           prefixIcon: Icon(Icons.phone_android_rounded, color: AppColors.textSecondary),
                         ),
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
+                          final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+                          if (digits.isEmpty) {
                             return 'Enter phone number';
                           }
-                          if (value.trim().length < 7) {
+                          if (digits.length < 7 || digits.length > 15) {
                             return 'Enter valid phone number';
                           }
                           return null;
@@ -258,8 +403,61 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                   ],
                 ),
 
+                const SizedBox(height: 16),
+
+                // Password Input Field
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter Password',
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter password';
+                    }
+                    if (value.trim().length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+
+                // Forgot Password link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _showForgotPasswordDialog,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.ambulanceTeal,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    ),
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+
                 if (authState.errorMessage != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -282,55 +480,58 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                   ),
                 ],
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
-                // Send OTP Button
+                // Password Sign In Button
                 CustomButton(
-                  label: 'Request OTP',
-                  icon: Icons.send_rounded,
+                  label: 'Sign In',
+                  icon: Icons.login_rounded,
                   isLoading: authState.isLoading,
-                  onPressed: _handleSendOtp,
+                  onPressed: _handlePasswordLogin,
                 ),
 
-                const SizedBox(height: 36),
+                const SizedBox(height: 16),
 
-                // Register Link
-                Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'New ambulance driver or fleet? ',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      ),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(6),
-                          onTap: () {
+                // New Driver Registration Entry
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: authState.isLoading
+                        ? null
+                        : () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const DriverRegistrationScreen(),
+                                builder: (_) => DriverRegistrationScreen(
+                                  initialPhone: _phoneController.text.trim(),
+                                ),
                               ),
                             );
                           },
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            child: Text(
-                              'Register Here',
-                              style: TextStyle(
-                                color: AppColors.ambulanceTeal,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ),
+                    icon: const Icon(Icons.app_registration_rounded, size: 20),
+                    label: const Text(
+                      'New Driver? Register Driver & Ambulance',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.ambulanceTeal,
+                      side: const BorderSide(color: AppColors.ambulanceTeal, width: 1.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    ],
+                    ),
                   ),
                 ),
+
+                const SizedBox(height: 16),
+                const Center(
+                  child: Text(
+                    'Emergency Ambulance Pilot Dispatch Console',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ),
+
                 const SizedBox(height: 24),
               ],
             ),

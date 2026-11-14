@@ -43,8 +43,8 @@ class TripModel {
     required this.specialAccessInstructions,
     required this.emergencyCategory,
     required this.status,
-    this.distanceRemainingMeters = 2400.0,
-    this.etaRemaining = '6 mins',
+    this.distanceRemainingMeters = 0.0,
+    this.etaRemaining = '',
     required this.acceptedAt,
     this.arrivedPickupAt,
     this.patientPickedUpAt,
@@ -54,67 +54,86 @@ class TripModel {
 
   factory TripModel.fromJson(Map<String, dynamic> json) {
     String destHospital = 'Emergency Hospital';
-    if (json['destination_hospital'] is String && (json['destination_hospital'] as String).isNotEmpty) {
+    if (json['destination_hospital'] is String &&
+        (json['destination_hospital'] as String).isNotEmpty) {
       destHospital = json['destination_hospital'];
     } else if (json['destination_hospital'] is Map) {
-      destHospital = json['destination_hospital']['name']?.toString() ??
+      destHospital =
+          json['destination_hospital']['name']?.toString() ??
           json['destination_hospital']['hospital_name']?.toString() ??
           destHospital;
     } else if (json['destination_hospital_name'] != null) {
       destHospital = json['destination_hospital_name'].toString();
     }
 
-    final pickupLat = (json['pickup_latitude'] as num?)?.toDouble() ??
+    final pickupLat =
+        (json['pickup_latitude'] as num?)?.toDouble() ??
         (json['pickup_lat'] as num?)?.toDouble() ??
         12.9716;
-    final pickupLng = (json['pickup_longitude'] as num?)?.toDouble() ??
+    final pickupLng =
+        (json['pickup_longitude'] as num?)?.toDouble() ??
         (json['pickup_lng'] as num?)?.toDouble() ??
         77.5946;
 
-    final destLat = (json['destination_latitude'] as num?)?.toDouble() ??
+    final destLat =
+        (json['destination_latitude'] as num?)?.toDouble() ??
         (json['destination_lat'] as num?)?.toDouble() ??
         (json['destination_hospital'] is Map
             ? (json['destination_hospital']['lat'] as num?)?.toDouble() ??
-                (json['destination_hospital']['latitude'] as num?)?.toDouble()
+                  (json['destination_hospital']['latitude'] as num?)?.toDouble()
             : null) ??
         (pickupLat + 0.015);
 
-    final destLng = (json['destination_longitude'] as num?)?.toDouble() ??
+    final destLng =
+        (json['destination_longitude'] as num?)?.toDouble() ??
         (json['destination_lng'] as num?)?.toDouble() ??
         (json['destination_hospital'] is Map
             ? (json['destination_hospital']['lng'] as num?)?.toDouble() ??
-                (json['destination_hospital']['longitude'] as num?)?.toDouble()
+                  (json['destination_hospital']['longitude'] as num?)
+                      ?.toDouble()
             : null) ??
         (pickupLng + 0.012);
 
-    final destAddress = (json['destination_address'] as String?) ??
-        (json['destination_hospital'] is Map ? json['destination_hospital']['address']?.toString() : null) ??
+    final destAddress =
+        (json['destination_address'] as String?) ??
+        (json['destination_hospital'] is Map
+            ? json['destination_hospital']['address']?.toString()
+            : null) ??
         'Casualty & Emergency Ward';
 
     return TripModel(
-      id: json['id'] as int? ?? 101,
-      bookingReference: json['booking_reference'] as String? ?? 'BK-${DateTime.now().millisecondsSinceEpoch % 100000}',
-      patientName: json['patient_name'] as String? ?? json['patientName'] as String?,
-      contactNumber: json['contact_number'] as String? ?? json['patient_phone'] as String? ?? json['callback_phone'] as String?,
-      pickupAddress: json['pickup_address'] as String? ?? 'Patient Pickup Location',
-      pickupLandmark: json['pickup_landmark'] as String?,
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 101,
+      bookingReference:
+          json['booking_reference']?.toString() ??
+          'BK-${DateTime.now().millisecondsSinceEpoch % 100000}',
+      patientName:
+          json['patient_name']?.toString() ?? json['patientName']?.toString(),
+      contactNumber:
+          json['contact_number']?.toString() ??
+          json['patient_phone']?.toString() ??
+          json['callback_phone']?.toString(),
+      pickupAddress:
+          json['pickup_address']?.toString() ?? 'Patient Pickup Location',
+      pickupLandmark: json['pickup_landmark']?.toString(),
       pickupLatitude: pickupLat,
       pickupLongitude: pickupLng,
       destinationHospital: destHospital,
       destinationAddress: destAddress,
       destinationLatitude: destLat,
       destinationLongitude: destLng,
-      emergencyNotes: json['emergency_notes'] as String? ??
-          json['essential_instructions'] as String? ??
+      emergencyNotes:
+          json['emergency_notes']?.toString() ??
+          json['essential_instructions']?.toString() ??
           'Patient emergency transit. Oxygen & vital monitoring required.',
-      specialAccessInstructions: json['special_access_instructions'] as String? ??
+      specialAccessInstructions:
+          json['special_access_instructions']?.toString() ??
           'Emergency Casualty entrance gate cleared.',
-      emergencyCategory: json['emergency_category'] as String? ?? 'Critical',
-      status: TripStatus.fromApi(json['status'] as String?),
-      distanceRemainingMeters: (json['distance_remaining_meters'] as num?)?.toDouble() ?? 2400.0,
-      etaRemaining: json['eta_remaining'] as String? ?? '6 mins',
-      acceptedAt: json['accepted_at'] != null
-          ? DateTime.tryParse(json['accepted_at'].toString()) ?? DateTime.now()
+      emergencyCategory: json['emergency_category']?.toString() ?? 'Critical',
+      status: TripStatus.fromApi(json['status']?.toString()),
+      distanceRemainingMeters: (json['distance_remaining_meters'] as num?)?.toDouble() ?? 0.0,
+      etaRemaining: json['eta_remaining']?.toString() ?? '',
+      acceptedAt: (json['accepted_at'] ?? json['dispatched_at'] ?? json['created_at']) != null
+          ? DateTime.tryParse((json['accepted_at'] ?? json['dispatched_at'] ?? json['created_at']).toString()) ?? DateTime.now()
           : DateTime.now(),
       arrivedPickupAt: json['arrived_pickup_at'] != null
           ? DateTime.tryParse(json['arrived_pickup_at'].toString())
@@ -159,7 +178,8 @@ class TripModel {
       specialAccessInstructions: specialAccessInstructions,
       emergencyCategory: emergencyCategory,
       status: status ?? this.status,
-      distanceRemainingMeters: distanceRemainingMeters ?? this.distanceRemainingMeters,
+      distanceRemainingMeters:
+          distanceRemainingMeters ?? this.distanceRemainingMeters,
       etaRemaining: etaRemaining ?? this.etaRemaining,
       acceptedAt: acceptedAt,
       arrivedPickupAt: arrivedPickupAt ?? this.arrivedPickupAt,

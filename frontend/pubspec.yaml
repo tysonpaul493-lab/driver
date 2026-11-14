@@ -31,10 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
-
   # State Management
   flutter_riverpod: ^2.5.1
 
@@ -48,26 +44,16 @@ dependencies:
   # Location & Geolocation
   geolocator: ^12.0.0
 
-  # Maps & Routing
-  google_maps_flutter: ^2.6.0
-  flutter_polyline_points: ^2.1.0
-
   # WebSockets (Laravel Reverb / Pusher protocol)
   web_socket_channel: ^2.4.5
-  pusher_channels_flutter: ^2.2.1
-
-  # Firebase Cloud Messaging
-  firebase_core: ^2.32.0
-  firebase_messaging: ^14.9.4
 
   # Utility & Hardware
   url_launcher: ^6.3.0
   intl: ^0.19.0
   image_picker: ^1.1.2
-  uuid: ^4.4.0
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
-  firebase_auth: ^4.20.0
+  flutter_local_notifications: ^21.0.0
 
 
 dev_dependencies:

@@ -59,6 +59,10 @@ class DriverLocationState {
 
 class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
   final DriverLocationService _service;
+  DateTime? _lastGeocodeTime;
+  double? _lastGeocodeLat;
+  double? _lastGeocodeLng;
+  bool _isGeocoding = false;
 
   DriverLocationNotifier(this._service) : super(const DriverLocationState()) {
     _initListener();
@@ -155,8 +159,8 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
   }
 
   void _initListener() {
-    _service.onTelemetryUpdated.listen((telemetry) async {
-      final addr = await reverseGeocode(telemetry.latitude, telemetry.longitude);
+    _service.onTelemetryUpdated.listen((telemetry) {
+      if (!mounted) return;
       state = state.copyWith(
         latitude: telemetry.latitude,
         longitude: telemetry.longitude,
@@ -166,25 +170,63 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
         isGpsStale: telemetry.isGpsStale,
         isTracking: _service.isTracking,
         lastUpdated: telemetry.timestamp,
-        currentAddress: addr,
+        currentAddress: _lastGeocodeTime == null
+            ? resolveIndianAddress(telemetry.latitude, telemetry.longitude)
+            : state.currentAddress,
       );
+      _refreshAddressInBackground(telemetry.latitude, telemetry.longitude);
     });
+  }
+
+  Future<void> _refreshAddressInBackground(
+    double lat,
+    double lng, {
+    bool force = false,
+  }) async {
+    if (_isGeocoding) return;
+    final now = DateTime.now();
+    if (!force &&
+        _lastGeocodeTime != null &&
+        _lastGeocodeLat != null &&
+        _lastGeocodeLng != null &&
+        now.difference(_lastGeocodeTime!).inSeconds < 20 &&
+        (lat - _lastGeocodeLat!).abs() < 0.001 &&
+        (lng - _lastGeocodeLng!).abs() < 0.001) {
+      return;
+    }
+
+    _isGeocoding = true;
+    try {
+      final addr = await reverseGeocode(lat, lng);
+      _lastGeocodeTime = DateTime.now();
+      _lastGeocodeLat = lat;
+      _lastGeocodeLng = lng;
+      if (mounted) {
+        state = state.copyWith(currentAddress: addr);
+      }
+    } finally {
+      _isGeocoding = false;
+    }
   }
 
   Future<void> startTracking({String? bookingReference}) async {
     await _service.startTracking(bookingReference: bookingReference);
-    state = state.copyWith(isTracking: true);
+    if (mounted) {
+      state = state.copyWith(isTracking: true);
+    }
   }
 
   Future<void> stopTracking() async {
     await _service.stopTracking();
-    state = state.copyWith(isTracking: false);
+    if (mounted) {
+      state = state.copyWith(isTracking: false);
+    }
   }
 
   Future<void> refreshCurrentLocation() async {
     final pos = await _service.getCurrentPosition();
-    if (pos != null) {
-      final addr = await reverseGeocode(pos.latitude, pos.longitude);
+    if (pos != null && mounted) {
+      final firstResolve = _lastGeocodeTime == null;
       state = state.copyWith(
         latitude: pos.latitude,
         longitude: pos.longitude,
@@ -192,7 +234,14 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
         heading: pos.heading,
         speed: pos.speed,
         lastUpdated: pos.timestamp,
-        currentAddress: addr,
+        currentAddress: firstResolve
+            ? resolveIndianAddress(pos.latitude, pos.longitude)
+            : state.currentAddress,
+      );
+      await _refreshAddressInBackground(
+        pos.latitude,
+        pos.longitude,
+        force: firstResolve,
       );
     }
   }

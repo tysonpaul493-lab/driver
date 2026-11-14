@@ -1,16 +1,19 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/document_viewer_dialog.dart';
+import '../../dashboard/screens/driver_dashboard_screen.dart';
 import '../../profile/screens/driver_profile_screen.dart';
 import '../providers/auth_provider.dart';
 import 'phone_login_screen.dart';
 
 class DocumentUploadScreen extends ConsumerStatefulWidget {
-  const DocumentUploadScreen({super.key});
+  final bool fromProfile;
+  const DocumentUploadScreen({super.key, this.fromProfile = false});
 
   @override
   ConsumerState<DocumentUploadScreen> createState() => _DocumentUploadScreenState();
@@ -91,22 +94,23 @@ class _DocumentUploadScreenState extends ConsumerState<DocumentUploadScreen> {
       builder: (ctx) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: AppColors.ambulanceTeal),
-              title: const Text('Take Photo', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-                if (picked != null) _processFile(docKey, File(picked.path));
-              },
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: AppColors.ambulanceTeal),
+                title: const Text('Take Photo', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+                  if (picked != null) _processPickedFile(docKey, picked);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.photo_library_rounded, color: AppColors.ambulanceTeal),
               title: const Text('Choose from Gallery', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
               onTap: () async {
                 Navigator.pop(ctx);
                 final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-                if (picked != null) _processFile(docKey, File(picked.path));
+                if (picked != null) _processPickedFile(docKey, picked);
               },
             ),
           ],
@@ -115,19 +119,32 @@ class _DocumentUploadScreenState extends ConsumerState<DocumentUploadScreen> {
     );
   }
 
-  Future<void> _processFile(String docKey, File file) async {
+  Future<void> _processPickedFile(String docKey, XFile picked) async {
     setState(() {
-      _selectedFiles[docKey] = file;
+      if (!kIsWeb) {
+        _selectedFiles[docKey] = File(picked.path);
+      }
       _uploading[docKey] = true;
     });
 
-    final success = await ref.read(authNotifierProvider.notifier).uploadDocument(file, docKey);
+    bool success;
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      final name = picked.name.isNotEmpty ? picked.name : '$docKey.jpg';
+      success = await ref
+          .read(authNotifierProvider.notifier)
+          .uploadDocumentBytes(bytes, name, docKey);
+    } else {
+      final file = File(picked.path);
+      success = await ref.read(authNotifierProvider.notifier).uploadDocument(file, docKey);
+    }
 
+    if (!mounted) return;
     setState(() {
       _uploading[docKey] = false;
       if (success) {
         _uploaded[docKey] = true;
-        _savedPaths[docKey] = file.path;
+        _savedPaths[docKey] = picked.path;
       }
     });
 
@@ -143,16 +160,55 @@ class _DocumentUploadScreenState extends ConsumerState<DocumentUploadScreen> {
 
   void _finishUploadFlow() {
     final driver = ref.read(currentDriverProvider);
+    final isAuthenticated = ref.read(authNotifierProvider).isAuthenticated;
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (widget.fromProfile && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+      messenger.showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.statusGreen,
+          content: Text(
+            'Compliance documents saved to your profile.',
+            style: TextStyle(color: Colors.white),
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    if (isAuthenticated && driver != null) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const DriverDashboardScreen()),
+        (route) => false,
+      );
+      messenger.showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.statusGreen,
+          content: Text(
+            'Registration & documents complete! Welcome to LifeRoute Dispatch.',
+            style: TextStyle(color: Colors.white),
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => PhoneLoginScreen(initialPhone: driver?.phone),
       ),
       (route) => false,
     );
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       const SnackBar(
         backgroundColor: AppColors.statusGreen,
-        content: Text('Registration & documents submitted! Please login with your registered mobile number.'),
+        content: Text(
+          'Registration & documents submitted! Please login with your registered mobile and password.',
+          style: TextStyle(color: Colors.white),
+        ),
         duration: Duration(seconds: 4),
       ),
     );
@@ -322,7 +378,11 @@ class _DocumentUploadScreenState extends ConsumerState<DocumentUploadScreen> {
               child: Column(
                 children: [
                   CustomButton(
-                    label: 'Submit for Admin Approval',
+                    label: widget.fromProfile
+                        ? 'Save & Return to Profile'
+                        : (ref.watch(authNotifierProvider).isAuthenticated
+                            ? 'Continue to Dispatch Dashboard'
+                            : 'Submit for Admin Approval'),
                     icon: Icons.shield_rounded,
                     onPressed: _finishUploadFlow,
                   ),

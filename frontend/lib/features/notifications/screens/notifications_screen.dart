@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/services/driver_notification_service.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../requests/models/booking_request_model.dart';
 import '../../requests/providers/requests_provider.dart';
 import '../models/app_notification_model.dart';
 
 class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
-  NotificationsNotifier() : super(_defaultNotifications);
+  final DioClient? _dioClient;
+
+  NotificationsNotifier([this._dioClient]) : super(_defaultNotifications) {
+    if (_dioClient != null) {
+      fetchFromBackend();
+    }
+  }
 
   static final List<AppNotificationModel> _defaultNotifications = [
     AppNotificationModel(
@@ -68,8 +79,63 @@ class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
     ),
   ];
 
-  void markAsRead(int id) {
-    state = state.map((n) => n.id == id ? n.copyWith(isRead: true) : n).toList();
+  Future<void> fetchFromBackend() async {
+    final dio = _dioClient;
+    if (dio == null) return;
+    try {
+      final response = await dio.get(ApiConstants.notifications);
+      final list = response['notifications'] as List? ?? [];
+      if (list.isEmpty) return;
+
+      final fetched = <AppNotificationModel>[];
+      for (final raw in list) {
+        if (raw is! Map<String, dynamic>) continue;
+        final typeStr = raw['type']?.toString().toLowerCase() ?? '';
+        final notifType =
+            typeStr.contains('dispatch') || typeStr.contains('booking')
+            ? NotificationType.newBooking
+            : (typeStr.contains('hospital') || typeStr.contains('route')
+                  ? NotificationType.destinationChanged
+                  : NotificationType.systemAlert);
+        fetched.add(
+          AppNotificationModel(
+            id:
+                int.tryParse(raw['id']?.toString() ?? '') ??
+                DateTime.now().millisecondsSinceEpoch,
+            title: raw['title']?.toString() ?? 'Dispatch Update',
+            message: raw['message']?.toString() ?? '',
+            type: notifType,
+            timestamp:
+                DateTime.tryParse(raw['created_at']?.toString() ?? '') ??
+                DateTime.now(),
+            isRead: raw['is_read'] == true,
+          ),
+        );
+      }
+      if (fetched.isNotEmpty) {
+        final existingIds = state.map((n) => n.id).toSet();
+        final merged = [
+          ...fetched.where((n) => !existingIds.contains(n.id)),
+          ...state,
+        ];
+        merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        state = merged;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> markAsRead(int id) async {
+    state = state
+        .map((n) => n.id == id ? n.copyWith(isRead: true) : n)
+        .toList();
+    final dio = _dioClient;
+    if (dio != null) {
+      try {
+        await dio.post(
+          ApiConstants.markNotificationRead.replaceAll('{id}', id.toString()),
+        );
+      } catch (_) {}
+    }
   }
 
   void markAllAsRead() {
@@ -81,18 +147,34 @@ class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
   }
 
   void addBookingAlert(BookingRequestModel req) {
-    if (state.any((n) => n.id == req.id)) return;
+    if (state.any(
+      (n) =>
+          n.id == req.id ||
+          (req.bookingReference.isNotEmpty &&
+              n.message.contains(req.bookingReference)),
+    )) {
+      return;
+    }
 
     final alert = AppNotificationModel(
       id: req.id,
-      title: '🚨 Emergency Dispatch: ${req.patientName ?? "Patient"} (${req.bookingReference})',
-      message: 'Emergency ${req.emergencyCategory} at ${req.pickupAddress}.\nPatient Phone: ${req.patientPhone ?? "+91 98450 12345"}\nDestination: ${req.destinationHospital ?? "Nearest Emergency Hospital"}\nNotes: ${req.essentialInstructions}',
+      title:
+          '🚨 Emergency Dispatch: ${req.patientName ?? "Patient"} (${req.bookingReference})',
+      message:
+          'Emergency ${req.emergencyCategory} at ${req.pickupAddress}.\nPatient Phone: ${req.patientPhone ?? "Contact not recorded"}\nDestination: ${req.destinationHospital ?? "Nearest Emergency Hospital"}\nNotes: ${req.essentialInstructions}',
       type: NotificationType.newBooking,
       timestamp: DateTime.now(),
       isRead: false,
       request: req,
     );
     state = [alert, ...state];
+
+    DriverNotificationService.instance.showDispatchAlert(
+      id: req.id,
+      title: '🚨 Emergency Dispatch: ${req.patientName ?? "Patient"}',
+      body: '${req.emergencyCategory} at ${req.pickupAddress}',
+      payload: req.id.toString(),
+    );
   }
 
   void addAlert({
@@ -100,8 +182,9 @@ class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
     required String message,
     required NotificationType type,
   }) {
+    final alertId = DateTime.now().millisecondsSinceEpoch % 100000;
     final alert = AppNotificationModel(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
+      id: alertId,
       title: title,
       message: message,
       type: type,
@@ -109,12 +192,18 @@ class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
       isRead: false,
     );
     state = [alert, ...state];
+
+    DriverNotificationService.instance.showSystemAlert(
+      id: alertId,
+      title: title,
+      body: message,
+    );
   }
 
   void triggerTestSystemAlert() {
     addAlert(
       title: '🛰️ Live System Diagnostic: OK',
-      message: 'All telematics, WebSocket Reverb channels, and hospital emergency relays are operating with 100% signal integrity.',
+      message: 'All vehicle telematics, live dispatch channels, and hospital emergency relays are operating with 100% signal integrity.',
       type: NotificationType.systemAlert,
     );
   }
@@ -128,15 +217,20 @@ class NotificationsNotifier extends StateNotifier<List<AppNotificationModel>> {
   }
 }
 
-final notificationsProvider = StateNotifierProvider<NotificationsNotifier, List<AppNotificationModel>>((ref) {
-  return NotificationsNotifier();
-});
+final notificationsProvider =
+    StateNotifierProvider<NotificationsNotifier, List<AppNotificationModel>>((
+      ref,
+    ) {
+      final dio = ref.watch(dioClientProvider);
+      return NotificationsNotifier(dio);
+    });
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
@@ -206,12 +300,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.person, color: AppColors.ambulanceTeal, size: 16),
+                          const Icon(
+                            Icons.person,
+                            color: AppColors.ambulanceTeal,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Patient: ${req.patientName ?? "Emergency Patient"}',
-                              style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ],
@@ -219,11 +321,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.phone, color: AppColors.statusGreen, size: 16),
+                          const Icon(
+                            Icons.phone,
+                            color: AppColors.statusGreen,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            req.patientPhone ?? '+91 98450 12345',
-                            style: const TextStyle(color: AppColors.ambulanceTeal, fontWeight: FontWeight.bold, fontSize: 13),
+                            req.patientPhone ?? 'Contact not recorded',
+                            style: const TextStyle(
+                              color: AppColors.ambulanceTeal,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -231,26 +341,41 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.location_on, color: AppColors.emergencyRed, size: 16),
+                          const Icon(
+                            Icons.location_on,
+                            color: AppColors.emergencyRed,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Pickup: ${req.pickupAddress}',
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      if (req.pickupLandmark != null && req.pickupLandmark!.isNotEmpty) ...[
+                      if (req.pickupLandmark != null &&
+                          req.pickupLandmark!.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.flag, color: AppColors.alertOrange, size: 15),
+                            const Icon(
+                              Icons.flag,
+                              color: AppColors.alertOrange,
+                              size: 15,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'Landmark: ${req.pickupLandmark}',
-                                style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -260,12 +385,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.local_hospital, color: Color(0xFF60A5FA), size: 16),
+                          const Icon(
+                            Icons.local_hospital,
+                            color: AppColors.statusGreen,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Hospital: ${req.destinationHospital ?? "Nearest Trauma Center"}',
-                              style: const TextStyle(color: Color(0xFF93C5FD), fontWeight: FontWeight.bold, fontSize: 12),
+                              style: const TextStyle(
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
@@ -273,11 +406,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.medical_services_rounded, color: AppColors.alertOrange, size: 15),
+                          const Icon(
+                            Icons.medical_services_rounded,
+                            color: AppColors.alertOrange,
+                            size: 15,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Emergency: ${req.emergencyCategory}',
-                            style: const TextStyle(color: AppColors.alertOrange, fontWeight: FontWeight.bold, fontSize: 12),
+                            style: const TextStyle(
+                              color: AppColors.alertOrange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -297,11 +438,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  const Icon(Icons.access_time_rounded, size: 14, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.access_time_rounded,
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     AppDateUtils.formatDateTime(notif.timestamp),
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -311,7 +459,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('DISMISS', style: TextStyle(color: AppColors.textMuted)),
+            child: const Text(
+              'DISMISS',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
           ),
           if (req != null)
             ElevatedButton.icon(
@@ -320,12 +471,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 await ref.read(requestsProvider.notifier).acceptRequest(req.id);
               },
               icon: const Icon(Icons.check_circle_rounded, size: 18),
-              label: const Text('ACCEPT BOOKING', style: TextStyle(fontWeight: FontWeight.bold)),
+              label: const Text(
+                'ACCEPT BOOKING',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.statusGreen,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
               ),
             ),
         ],
@@ -372,7 +531,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 ),
                 child: Text(
                   '$unreadCount',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -386,14 +549,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               if (val == 'mark_read') {
                 ref.read(notificationsProvider.notifier).markAllAsRead();
               } else if (val == 'test_sys') {
-                ref.read(notificationsProvider.notifier).triggerTestSystemAlert();
+                ref
+                    .read(notificationsProvider.notifier)
+                    .triggerTestSystemAlert();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Test System Alert generated!')),
                 );
               } else if (val == 'test_dispatch') {
-                ref.read(notificationsProvider.notifier).triggerTestDispatchAlert();
+                ref
+                    .read(notificationsProvider.notifier)
+                    .triggerTestDispatchAlert();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Test Dispatch Alert generated!')),
+                  const SnackBar(
+                    content: Text('Test Dispatch Alert generated!'),
+                  ),
                 );
               } else if (val == 'clear') {
                 ref.read(notificationsProvider.notifier).clearAll();
@@ -404,9 +573,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'mark_read',
                 child: Row(
                   children: [
-                    Icon(Icons.done_all_rounded, size: 18, color: AppColors.ambulanceTeal),
+                    Icon(
+                      Icons.done_all_rounded,
+                      size: 18,
+                      color: AppColors.ambulanceTeal,
+                    ),
                     SizedBox(width: 8),
-                    Text('Mark All as Read', style: TextStyle(color: AppColors.textPrimary)),
+                    Text(
+                      'Mark All as Read',
+                      style: TextStyle(color: AppColors.textPrimary),
+                    ),
                   ],
                 ),
               ),
@@ -414,9 +590,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'test_sys',
                 child: Row(
                   children: [
-                    Icon(Icons.phonelink_setup_rounded, size: 18, color: Color(0xFF64B5F6)),
+                    Icon(
+                      Icons.phonelink_setup_rounded,
+                      size: 18,
+                      color: Color(0xFF64B5F6),
+                    ),
                     SizedBox(width: 8),
-                    Text('Trigger Test System Alert', style: TextStyle(color: AppColors.textPrimary)),
+                    Text(
+                      'Trigger Test System Alert',
+                      style: TextStyle(color: AppColors.textPrimary),
+                    ),
                   ],
                 ),
               ),
@@ -424,9 +607,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'test_dispatch',
                 child: Row(
                   children: [
-                    Icon(Icons.campaign_rounded, size: 18, color: AppColors.ambulanceTeal),
+                    Icon(
+                      Icons.campaign_rounded,
+                      size: 18,
+                      color: AppColors.ambulanceTeal,
+                    ),
                     SizedBox(width: 8),
-                    Text('Trigger Test Dispatch Alert', style: TextStyle(color: AppColors.textPrimary)),
+                    Text(
+                      'Trigger Test Dispatch Alert',
+                      style: TextStyle(color: AppColors.textPrimary),
+                    ),
                   ],
                 ),
               ),
@@ -434,9 +624,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 value: 'clear',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.emergencyRed),
+                    Icon(
+                      Icons.delete_outline_rounded,
+                      size: 18,
+                      color: AppColors.emergencyRed,
+                    ),
                     SizedBox(width: 8),
-                    Text('Clear All Alerts', style: TextStyle(color: AppColors.emergencyRed)),
+                    Text(
+                      'Clear All Alerts',
+                      style: TextStyle(color: AppColors.emergencyRed),
+                    ),
                   ],
                 ),
               ),
@@ -456,11 +653,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 children: [
                   _buildFilterChip('All', notifications.length),
                   const SizedBox(width: 8),
-                  _buildFilterChip('System', notifications.where((n) => n.type == NotificationType.systemAlert).length),
+                  _buildFilterChip(
+                    'System',
+                    notifications
+                        .where((n) => n.type == NotificationType.systemAlert)
+                        .length,
+                  ),
                   const SizedBox(width: 8),
-                  _buildFilterChip('Dispatch', notifications.where((n) => n.categoryLabel == 'Dispatch').length),
+                  _buildFilterChip(
+                    'Dispatch',
+                    notifications
+                        .where((n) => n.categoryLabel == 'Dispatch')
+                        .length,
+                  ),
                   const SizedBox(width: 8),
-                  _buildFilterChip('Hospital', notifications.where((n) => n.categoryLabel == 'Hospital & Route').length),
+                  _buildFilterChip(
+                    'Hospital',
+                    notifications
+                        .where((n) => n.categoryLabel == 'Hospital & Route')
+                        .length,
+                  ),
                 ],
               ),
             ),
@@ -473,29 +685,41 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.notifications_off_outlined, size: 54, color: AppColors.textMuted),
+                        const Icon(
+                          Icons.notifications_off_outlined,
+                          size: 54,
+                          color: AppColors.textMuted,
+                        ),
                         const SizedBox(height: 14),
                         Text(
                           'No alerts found in $_selectedFilter category.',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           onPressed: () {
-                            ref.read(notificationsProvider.notifier).triggerTestSystemAlert();
+                            ref
+                                .read(notificationsProvider.notifier)
+                                .triggerTestSystemAlert();
                           },
                           icon: const Icon(Icons.add_alert_rounded, size: 18),
                           label: const Text('Add Test Alert'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.ambulanceTeal,
-                            foregroundColor: Colors.black,
+                            foregroundColor: Colors.white,
                           ),
                         ),
                       ],
                     ),
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     itemCount: filtered.length,
                     separatorBuilder: (ctx, idx) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
@@ -506,7 +730,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           borderRadius: BorderRadius.circular(14),
                           enableFeedback: true,
                           splashColor: notif.iconColor.withValues(alpha: 0.15),
-                          highlightColor: notif.iconColor.withValues(alpha: 0.08),
+                          highlightColor: notif.iconColor.withValues(
+                            alpha: 0.08,
+                          ),
                           onTap: () => _showAlertDetailsDialog(notif),
                           child: Container(
                             padding: const EdgeInsets.all(14),
@@ -528,10 +754,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: notif.iconColor.withValues(alpha: 0.15),
+                                        color: notif.iconColor.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: Icon(notif.icon, color: notif.iconColor, size: 22),
+                                      child: Icon(
+                                        notif.icon,
+                                        color: notif.iconColor,
+                                        size: 22,
+                                      ),
                                     ),
                                     if (!notif.isRead)
                                       Positioned(
@@ -543,7 +775,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                           decoration: BoxDecoration(
                                             color: notif.iconColor,
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: AppColors.surfaceDark, width: 1.5),
+                                            border: Border.all(
+                                              color: AppColors.surfaceDark,
+                                              width: 1.5,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -552,10 +787,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Expanded(
                                             child: Text(
@@ -563,14 +800,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                               style: TextStyle(
                                                 color: AppColors.textPrimary,
                                                 fontSize: 14,
-                                                fontWeight: notif.isRead ? FontWeight.w600 : FontWeight.w800,
+                                                fontWeight: notif.isRead
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w800,
                                               ),
                                             ),
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
-                                            AppDateUtils.formatRelativeTime(notif.timestamp),
-                                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                            AppDateUtils.formatRelativeTime(
+                                              notif.timestamp,
+                                            ),
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 11,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -578,20 +822,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                       Text(
                                         notif.message,
                                         style: TextStyle(
-                                          color: notif.isRead ? AppColors.textSecondary : AppColors.textPrimary,
+                                          color: notif.isRead
+                                              ? AppColors.textSecondary
+                                              : AppColors.textPrimary,
                                           fontSize: 13,
                                           height: 1.35,
                                         ),
                                       ),
                                       const SizedBox(height: 8),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
                                             decoration: BoxDecoration(
-                                              color: notif.iconColor.withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(6),
+                                              color: notif.iconColor.withValues(
+                                                alpha: 0.12,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
                                             ),
                                             child: Text(
                                               notif.categoryLabel.toUpperCase(),
@@ -603,8 +856,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                             ),
                                           ),
                                           Text(
-                                            notif.isRead ? 'Tap to view' : 'Tap to mark read',
-                                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                            notif.isRead
+                                                ? 'Tap to view'
+                                                : 'Tap to mark read',
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 11,
+                                            ),
                                           ),
                                         ],
                                       ),

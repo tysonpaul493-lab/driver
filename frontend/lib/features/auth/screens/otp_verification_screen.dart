@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../dashboard/screens/driver_dashboard_screen.dart';
 import '../providers/auth_provider.dart';
 import '../../../shared/widgets/otp_bars_widget.dart';
-import '../../../core/services/firebase_phone_auth_service.dart';
 
 class OtpVerificationScreen extends ConsumerStatefulWidget {
   final String phoneNumber;
@@ -30,6 +30,12 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   void initState() {
     super.initState();
     _startCountdown();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _otpFocusNode.requestFocus();
+        SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      }
+    });
   }
 
   void _startCountdown() {
@@ -64,15 +70,15 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       return;
     }
 
-    // 1. Verify with Firebase Phone Auth
-    await FirebasePhoneAuthService.verifySmsCode(smsCode: otp);
-
-    // 2. Authenticate driver session
-    final success = await ref.read(authNotifierProvider.notifier).verifyOtp(otp);
-    if (success && mounted) {
+    // Authenticate driver session after verifying manually entered SMS OTP
+    final success = await ref
+        .read(authNotifierProvider.notifier)
+        .verifyOtp(otp, phoneOverride: widget.phoneNumber);
+    if (!mounted) return;
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Firebase phone authentication verified successfully!'),
+          content: Text('Phone authentication verified successfully!'),
           backgroundColor: AppColors.statusGreen,
         ),
       );
@@ -80,18 +86,40 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
         MaterialPageRoute(builder: (_) => const DriverDashboardScreen()),
         (route) => false,
       );
+    } else {
+      final err = ref.read(authNotifierProvider).errorMessage ??
+          'Invalid or expired SMS code entered. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.emergencyRed,
+        ),
+      );
     }
   }
 
   Future<void> _handleResend() async {
     if (_secondsRemaining > 0) return;
-    await ref.read(authNotifierProvider.notifier).sendOtp(widget.phoneNumber);
-    _startCountdown();
-    if (mounted) {
+    final sent = await ref
+        .read(authNotifierProvider.notifier)
+        .sendOtp(widget.phoneNumber, isResend: true);
+    if (!mounted) return;
+    if (sent) {
+      _otpController.clear();
+      _startCountdown();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Real SMS OTP requested for ${widget.phoneNumber} via Firebase'),
+          content: Text('Verification OTP sent to ${widget.phoneNumber}'),
           backgroundColor: AppColors.ambulanceTeal,
+        ),
+      );
+    } else {
+      final err = ref.read(authNotifierProvider).errorMessage ??
+          'Unable to resend SMS verification code.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.emergencyRed,
         ),
       );
     }
@@ -117,7 +145,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
             children: [
               const SizedBox(height: 16),
 
-              // Firebase Phone Auth Badge
+              // SMS Verification Badge
               Row(
                 children: [
                   Container(
@@ -138,17 +166,17 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF57C00).withValues(alpha: 0.15),
+                      color: AppColors.ambulanceTeal.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFF57C00).withValues(alpha: 0.4)),
+                      border: Border.all(color: AppColors.ambulanceTeal.withValues(alpha: 0.4)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.local_fire_department_rounded, color: Color(0xFFF57C00), size: 16),
+                        Icon(Icons.verified_user_rounded, color: AppColors.ambulanceTeal, size: 16),
                         SizedBox(width: 6),
                         Text(
-                          'Firebase Phone Auth',
+                          'Verified SMS Security',
                           style: TextStyle(
                             color: Color(0xFFF57C00),
                             fontSize: 12,
@@ -188,9 +216,9 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
-              // 6-Digit Segmented OTP Bars (Clean manual input)
+              // 6-Digit Segmented OTP Bars (Manual SMS code entry)
               DriverOtpBarsWidget(
                 controller: _otpController,
                 focusNode: _otpFocusNode,

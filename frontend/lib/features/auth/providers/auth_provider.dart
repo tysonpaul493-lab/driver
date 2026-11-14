@@ -1,18 +1,22 @@
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
-import '../../../core/services/sms_otp_service.dart';
-import '../../../core/services/firebase_phone_auth_service.dart';
+import '../../../core/utils/phone_utils.dart';
 import '../../../core/storage/secure_storage_service.dart';
+import '../../../core/websocket/reverb_provider.dart';
 import '../models/driver_model.dart';
 import '../models/vehicle_model.dart';
 import '../repositories/auth_repository.dart';
 
 // Dependency injection providers
-final Provider<SecureStorageService> storageServiceProvider = Provider<SecureStorageService>((ref) {
-  return SecureStorageService();
-});
+final Provider<SecureStorageService> storageServiceProvider =
+    Provider<SecureStorageService>((ref) {
+      return SecureStorageService();
+    });
 
 final Provider<DioClient> dioClientProvider = Provider<DioClient>((ref) {
   final storage = ref.watch(storageServiceProvider);
@@ -21,14 +25,18 @@ final Provider<DioClient> dioClientProvider = Provider<DioClient>((ref) {
     onUnauthorized: () {
       ref.read(authNotifierProvider.notifier).handleUnauthorized();
     },
+    onHostSwitched: () {
+      ref.read(reverbServiceProvider).reconnectIfActive();
+    },
   );
 });
 
-final Provider<AuthRepository> authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final dio = ref.watch(dioClientProvider);
-  final storage = ref.watch(storageServiceProvider);
-  return AuthRepository(dio, storage);
-});
+final Provider<AuthRepository> authRepositoryProvider =
+    Provider<AuthRepository>((ref) {
+      final dio = ref.watch(dioClientProvider);
+      final storage = ref.watch(storageServiceProvider);
+      return AuthRepository(dio, storage);
+    });
 
 /// Authentication states
 enum AuthStatus {
@@ -46,7 +54,6 @@ class AuthState {
   final DriverModel? driver;
   final String? errorMessage;
   final String? otpSentToPhone;
-  final String? lastGeneratedOtp;
   final bool isDriverRegistered;
 
   const AuthState({
@@ -55,7 +62,6 @@ class AuthState {
     this.driver,
     this.errorMessage,
     this.otpSentToPhone,
-    this.lastGeneratedOtp,
     this.isDriverRegistered = false,
   });
 
@@ -69,7 +75,6 @@ class AuthState {
     DriverModel? driver,
     String? errorMessage,
     String? otpSentToPhone,
-    String? lastGeneratedOtp,
     bool? isDriverRegistered,
   }) {
     return AuthState(
@@ -78,7 +83,6 @@ class AuthState {
       driver: driver ?? this.driver,
       errorMessage: errorMessage,
       otpSentToPhone: otpSentToPhone ?? this.otpSentToPhone,
-      lastGeneratedOtp: lastGeneratedOtp ?? this.lastGeneratedOtp,
       isDriverRegistered: isDriverRegistered ?? this.isDriverRegistered,
     );
   }
@@ -147,187 +151,274 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Direct 1-Tap Sign In for already registered ambulance pilot without repeating registration
   Future<bool> loginAsRegisteredDriver(DriverModel registeredDriver) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
-    await _storage.saveAuthToken('token_${DateTime.now().millisecondsSinceEpoch}');
+    await _storage.saveAuthToken(
+      'token_${DateTime.now().millisecondsSinceEpoch}',
+    );
     await _storage.saveDriverId(registeredDriver.id);
     await _storage.saveDriverProfile(registeredDriver.toJson());
-    await _storage.saveRegisteredDriverByPhone(registeredDriver.phone, registeredDriver.toJson());
+    await _storage.saveRegisteredDriverByPhone(
+      registeredDriver.phone,
+      registeredDriver.toJson(),
+    );
     await _storage.setOnlineStatus(true);
-    _resolveDriverState(registeredDriver.copyWith(
-      verificationStatus: VerificationStatus.approved,
-    ));
+    _resolveDriverState(
+      registeredDriver.copyWith(
+        verificationStatus: VerificationStatus.approved,
+      ),
+    );
     return true;
   }
 
-  /// Check if a given phone number is registered as a pilot
+  /// Check if a given phone number is registered locally or on the dispatch server
   Future<bool> isPhoneRegistered(String phone) async {
     final clean = phone.replaceAll(RegExp(r'\D'), '');
-    final last10 = clean.length >= 10 ? clean.substring(clean.length - 10) : clean;
+    final last10 = clean.length >= 10
+        ? clean.substring(clean.length - 10)
+        : clean;
 
     final saved = await _storage.getRegisteredDriverByPhone(phone);
     if (saved != null) return true;
 
-    final savedWithCode = await _storage.getRegisteredDriverByPhone('+91$last10');
+    final savedWithCode = await _storage.getRegisteredDriverByPhone(
+      '+91$last10',
+    );
     if (savedWithCode != null) return true;
 
     final cached = await _storage.getDriverProfile();
     if (cached != null) {
-      final cachedPhone = (cached['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
-      if (cachedPhone.contains(last10)) return true;
+      final cachedPhone = (cached['phone'] ?? '').toString().replaceAll(
+        RegExp(r'\D'),
+        '',
+      );
+      if (last10.isNotEmpty && cachedPhone.contains(last10)) return true;
     }
 
-    // Default registered demo emergency pilot
-    if (last10 == '9876543210' || last10 == '9999999999') return true;
+    // Check dispatch server for fresh APK installs or cross-device drivers
+    try {
+      if (await _repository.checkPhoneRegistered(phone)) {
+        return true;
+      }
+    } catch (_) {}
 
     return false;
   }
 
-  /// Request OTP with real SMS API generation & persistent phone check
-  Future<bool> sendOtp(String phone) async {
-    state = state.copyWith(isSubmitting: true, errorMessage: null);
-
-    // 1. Enforce that only registered drivers can request OTP and login
-    final isRegistered = await isPhoneRegistered(phone);
-    if (!isRegistered) {
+  /// Sign in using registered mobile number and password
+  Future<bool> loginWithPassword({
+    required String phone,
+    required String password,
+  }) async {
+    final formattedPhone = PhoneUtils.formatInternationalPhone(phone);
+    if (password.trim().isEmpty) {
       state = state.copyWith(
         isSubmitting: false,
         status: AuthStatus.error,
-        errorMessage: 'Mobile number $phone is not registered. Please register first.',
+        errorMessage: 'Please enter your password.',
       );
       return false;
     }
 
-    // 2. Request Real Firebase Phone OTP & fallback SMS dispatch
-    final fbResult = await FirebasePhoneAuthService.sendPhoneOtp(
-      phoneNumber: phone,
-      onCodeSent: (vId) {},
-      onError: (err) {},
-      onAutoVerified: (cred) {},
-    );
-    final smsResult = await SmsOtpService.sendOtpSms(phone: phone, customOtp: fbResult.fallbackOtp);
-
-    // 3. Also notify Laravel backend if reachable
-    try {
-      await _repository.sendOtp(phone);
-    } catch (_) {}
-
-    state = state.copyWith(
-      isSubmitting: false,
-      otpSentToPhone: phone,
-      lastGeneratedOtp: fbResult.fallbackOtp ?? smsResult.otp,
-      isDriverRegistered: true,
-    );
-    return true;
-  }
-
-  /// Verify OTP and log in (with persistent driver restoration)
-  Future<bool> verifyOtp(String otp) async {
-    final phone = state.otpSentToPhone ?? '';
     state = state.copyWith(isSubmitting: true, errorMessage: null);
 
-    // Accept if matching generated OTP, universal emergency testing bypass 123456, or genuine 6-digit Firebase SMS code
-    final isValidLocal = (state.lastGeneratedOtp != null && otp.trim() == state.lastGeneratedOtp) ||
-        otp.trim() == '123456' ||
-        (otp.trim().length == 6 && RegExp(r'^\d{6}$').hasMatch(otp.trim()));
-
     try {
-      final response = await _repository.verifyOtp(phone, otp);
+      final response = await _repository.loginWithPassword(
+        formattedPhone,
+        password.trim(),
+      );
+      await _storage.saveRegisteredDriverByPhone(
+        formattedPhone,
+        response.driver.toJson(),
+      );
+      await _storage.setOnlineStatus(true);
       _resolveDriverState(response.driver);
       return true;
     } on ApiException catch (e) {
-      if (e.isNetworkError && isValidLocal) {
-        return _loginFallbackIndianDriver(phone);
-      }
-      if (!isValidLocal) {
-        state = state.copyWith(
-          isSubmitting: false,
-          status: AuthStatus.error,
-          errorMessage: e.firstErrorMessage.isNotEmpty ? e.firstErrorMessage : 'Invalid verification code',
-        );
-        return false;
-      }
-      return _loginFallbackIndianDriver(phone);
-    } catch (_) {
-      if (isValidLocal) {
-        return _loginFallbackIndianDriver(phone);
-      }
+      final msg = e.isNetworkError
+          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000). Check connection.'
+          : (e.firstErrorMessage.isNotEmpty
+              ? e.firstErrorMessage
+              : 'Invalid mobile number or password.');
       state = state.copyWith(
         isSubmitting: false,
         status: AuthStatus.error,
-        errorMessage: 'Invalid verification code entered.',
+        errorMessage: msg,
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'Login failed: $e',
       );
       return false;
     }
   }
 
-  Future<bool> _loginFallbackIndianDriver(String phone) async {
-    // 1. Check if driver has already registered with this phone number or last session
-    final savedProfile = await _storage.getRegisteredDriverByPhone(phone);
-    if (savedProfile != null) {
-      final registeredDriver = DriverModel.fromJson(savedProfile).copyWith(
-        verificationStatus: VerificationStatus.approved,
+  /// Reset password for driver account
+  Future<bool> resetPassword({
+    required String phone,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final formattedPhone = PhoneUtils.formatInternationalPhone(phone);
+    if (newPassword.trim().length < 6) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'New password must be at least 6 characters.',
       );
-      await _storage.saveAuthToken('token_${DateTime.now().millisecondsSinceEpoch}');
-      await _storage.saveDriverId(registeredDriver.id);
-      await _storage.saveDriverProfile(registeredDriver.toJson());
-      await _storage.setOnlineStatus(true);
-      _resolveDriverState(registeredDriver);
-      return true;
+      return false;
+    }
+    if (newPassword.trim() != confirmPassword.trim()) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'New password and confirm password do not match.',
+      );
+      return false;
     }
 
-    // 2. If no saved registration found, create and permanently register this driver
-    // so they are remembered forever and NEVER have to register again!
-    final cleanDriver = DriverModel(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      name: phone.length >= 10 ? 'Driver ${phone.substring(phone.length - 4)}' : 'Ambulance Pilot',
-      phone: phone.isNotEmpty ? phone : '+91',
-      email: '',
-      emergencyContact: '',
-      licenseNumber: 'DL-${phone.replaceAll(RegExp(r'\D'), '')}',
-      licenseExpiryDate: '2030-12-31',
-      verificationStatus: VerificationStatus.approved,
-      assignedVehicle: VehicleModel(
-        id: 1,
-        registrationNumber: 'KA-01-EA-1080',
-        vehicleType: VehicleType.als,
-        makeModel: 'Force Traveller Advanced ICU',
-        year: DateTime.now().year,
-        equipmentList: const [
-          'Oxygen Cylinder & Regulators',
-          'Defibrillator / AED',
-          'Transport Ventilator',
-          'Suction Unit (Electric/Manual)',
-          'Foldable Stretcher & Spine Board',
-        ],
-        operatorAffiliation: '108 National Emergency Network',
-        permitNumber: 'PER-AMB-2024-88',
-        permitExpiryDate: '2030-12-31',
-        insurancePolicyNumber: 'INS-COM-2024-991',
-        insuranceExpiryDate: '2030-12-31',
-        isEligible: true,
-      ),
-      isOnline: true,
-      rating: 5.0,
-      completedTripsCount: 0,
-      documentsUploaded: const {
-        'driving_license_front': true,
-        'vehicle_registration': true,
-        'ambulance_permit': true,
-      },
-    );
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
 
-    await _storage.saveAuthToken('token_${cleanDriver.id}');
-    await _storage.saveDriverId(cleanDriver.id);
-    await _storage.saveDriverProfile(cleanDriver.toJson());
-    await _storage.saveRegisteredDriverByPhone(phone, cleanDriver.toJson());
-    await _storage.setOnlineStatus(true);
-    _resolveDriverState(cleanDriver);
-    return true;
+    try {
+      final response = await _repository.resetPassword(
+        formattedPhone,
+        newPassword.trim(),
+        confirmPassword.trim(),
+      );
+      await _storage.saveRegisteredDriverByPhone(
+        formattedPhone,
+        response.driver.toJson(),
+      );
+      await _storage.setOnlineStatus(true);
+      _resolveDriverState(response.driver);
+      return true;
+    } on ApiException catch (e) {
+      final msg = e.isNetworkError
+          ? 'Cannot reach dispatch server. Check your connection.'
+          : (e.firstErrorMessage.isNotEmpty
+              ? e.firstErrorMessage
+              : 'Password reset failed.');
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: msg,
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'Password reset failed: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Request live SMS OTP via configured dispatch SMS gateway
+  Future<bool> sendOtp(String phone, {bool isResend = false}) async {
+    final formattedPhone = PhoneUtils.formatInternationalPhone(phone);
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+
+    try {
+      final response = await _repository.sendOtp(formattedPhone);
+      if (response['sms_dispatched'] != true &&
+          response['status'] != 'success') {
+        final msg = (response['message'] ?? '').toString().trim();
+        state = state.copyWith(
+          isSubmitting: false,
+          status: AuthStatus.error,
+          errorMessage: msg.isNotEmpty
+              ? msg
+              : 'Unable to send SMS verification code to $formattedPhone.',
+        );
+        return false;
+      }
+
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.unauthenticated,
+        errorMessage: null,
+        otpSentToPhone: formattedPhone,
+        isDriverRegistered: true,
+      );
+      return true;
+    } on ApiException catch (e) {
+      final msg = e.isNetworkError
+          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000). Check backend or tap the server icon at top-right.'
+          : (e.firstErrorMessage.isNotEmpty
+                ? e.firstErrorMessage
+                : 'Unable to send SMS verification code to $formattedPhone.');
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: msg,
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'Unable to send SMS verification code: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Verify manually entered 6-digit SMS OTP and authenticate driver session
+  Future<bool> verifyOtp(String otp, {String? phoneOverride}) async {
+    final rawPhone = (phoneOverride != null && phoneOverride.trim().isNotEmpty)
+        ? phoneOverride
+        : (state.otpSentToPhone ?? '');
+    final phone = PhoneUtils.formatInternationalPhone(rawPhone);
+    final trimmedOtp = otp.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(trimmedOtp)) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'Please enter the exact 6-digit SMS OTP sent to your mobile number.',
+      );
+      return false;
+    }
+
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+
+    try {
+      final response = await _repository.verifyOtp(phone, trimmedOtp);
+      await _storage.saveRegisteredDriverByPhone(
+        phone,
+        response.driver.toJson(),
+      );
+      await _storage.setOnlineStatus(true);
+      _resolveDriverState(response.driver);
+      return true;
+    } on ApiException catch (e) {
+      final msg = e.isNetworkError
+          ? 'Cannot reach dispatch server (${ApiConstants.effectiveHost}:8000) to verify OTP. Check your connection and try again.'
+          : (e.firstErrorMessage.isNotEmpty
+                ? e.firstErrorMessage
+                : 'Invalid verification code');
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: msg,
+      );
+      return false;
+    } catch (_) {
+      state = state.copyWith(
+        isSubmitting: false,
+        status: AuthStatus.error,
+        errorMessage: 'Unable to verify SMS code. Please check your connection and try again.',
+      );
+      return false;
+    }
   }
 
   /// Register driver
   Future<bool> register({
     required String name,
     required String phone,
+    String? password,
     required String email,
     required String emergencyContact,
     required String licenseNumber,
@@ -348,6 +439,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final response = await _repository.registerDriver(
         name: name,
         phone: phone,
+        password: password,
         email: email,
         emergencyContact: emergencyContact,
         licenseNumber: licenseNumber,
@@ -363,8 +455,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
         insurancePolicyNumber: insurancePolicyNumber,
         insuranceExpiryDate: insuranceExpiryDate,
       );
-      _resolveDriverState(response.driver);
-      await _storage.saveRegisteredDriverByPhone(phone, response.driver.toJson());
+      await _storage.saveRegisteredDriverByPhone(
+        phone,
+        response.driver.toJson(),
+      );
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        driver: response.driver,
+        errorMessage: null,
+      );
       return true;
     } on ApiException catch (e) {
       if (e.isNetworkError) {
@@ -457,39 +556,85 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isEligible: true,
       ),
     );
-    await _storage.saveAuthToken('token_${fallbackDriver.id}');
     await _storage.saveDriverProfile(fallbackDriver.toJson());
     await _storage.saveDriverId(fallbackDriver.id);
     await _storage.saveRegisteredDriverByPhone(phone, fallbackDriver.toJson());
-    await _storage.setOnlineStatus(true);
-    _resolveDriverState(fallbackDriver);
+    state = state.copyWith(
+      status: AuthStatus.unauthenticated,
+      driver: fallbackDriver,
+      errorMessage: null,
+    );
     return true;
   }
 
+  Future<void> _markDocumentUploadedLocally(String docType) async {
+    if (state.driver != null) {
+      final docs = Map<String, bool>.from(state.driver!.documentsUploaded);
+      docs[docType] = true;
+      final updated = state.driver!.copyWith(documentsUploaded: docs);
+      await _storage.saveDriverProfile(updated.toJson());
+      await _storage.saveRegisteredDriverByPhone(
+        updated.phone,
+        updated.toJson(),
+      );
+      _resolveDriverState(updated);
+    }
+  }
+
   /// Upload verification documents & persist local preview paths
-  Future<bool> uploadDocument(File file, String docType, {String? expiryDate}) async {
+  Future<bool> uploadDocument(
+    File file,
+    String docType, {
+    String? expiryDate,
+  }) async {
     await _storage.saveDocumentImagePath(docType, file.path);
     try {
-      await _repository.uploadDocument(file: file, documentType: docType, expiryDate: expiryDate);
+      await _repository.uploadDocument(
+        file: file,
+        documentType: docType,
+        expiryDate: expiryDate,
+      );
       final updatedDriver = await _repository.getProfile();
       _resolveDriverState(updatedDriver);
-      await _storage.saveRegisteredDriverByPhone(updatedDriver.phone, updatedDriver.toJson());
+      await _storage.saveRegisteredDriverByPhone(
+        updatedDriver.phone,
+        updatedDriver.toJson(),
+      );
       return true;
     } catch (_) {
-      // In offline mode, update documentsUploaded map on current driver
-      if (state.driver != null) {
-        final docs = Map<String, bool>.from(state.driver!.documentsUploaded);
-        docs[docType] = true;
-        final updated = state.driver!.copyWith(documentsUploaded: docs);
-        await _storage.saveDriverProfile(updated.toJson());
-        await _storage.saveRegisteredDriverByPhone(updated.phone, updated.toJson());
-        _resolveDriverState(updated);
-      }
+      await _markDocumentUploadedLocally(docType);
       return true;
     }
   }
 
-  /// Update Driver Profile (Edit Profile from UI)
+  /// Upload verification documents from raw bytes (Web-safe)
+  Future<bool> uploadDocumentBytes(
+    List<int> bytes,
+    String fileName,
+    String docType, {
+    String? expiryDate,
+  }) async {
+    try {
+      await _repository.uploadDocumentBytes(
+        bytes: bytes,
+        fileName: fileName,
+        documentType: docType,
+        expiryDate: expiryDate,
+      );
+      final updatedDriver = await _repository.getProfile();
+      _resolveDriverState(updatedDriver);
+      await _storage.saveRegisteredDriverByPhone(
+        updatedDriver.phone,
+        updatedDriver.toJson(),
+      );
+      return true;
+    } catch (_) {
+      await _markDocumentUploadedLocally(docType);
+      return true;
+    }
+  }
+
+  /// Update Driver Profile (Edit Profile from UI, syncing both server and local storage)
   Future<bool> updateDriverProfile({
     required String name,
     required String email,
@@ -503,36 +648,62 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final current = state.driver;
     if (current == null) return false;
 
-    final updatedVehicle = (current.assignedVehicle ?? VehicleModel(
-      registrationNumber: registrationNumber,
-      vehicleType: VehicleType.fromString(vehicleType),
-      makeModel: makeModel,
-      year: 2024,
-      equipmentList: const [],
-      operatorAffiliation: operatorAffiliation,
-      permitNumber: '',
-      permitExpiryDate: '',
-      insurancePolicyNumber: '',
-      insuranceExpiryDate: '',
-    )).copyWith(
-      registrationNumber: registrationNumber,
-      vehicleType: VehicleType.fromString(vehicleType),
-      makeModel: makeModel,
-      operatorAffiliation: operatorAffiliation,
-    );
+    try {
+      final remoteUpdated = await _repository.updateProfile(
+        name: name,
+        email: email,
+        emergencyContact: emergencyContact,
+        licenseNumber: licenseNumber,
+        registrationNumber: registrationNumber,
+        vehicleType: vehicleType,
+        makeModel: makeModel,
+        operatorAffiliation: operatorAffiliation,
+      );
+      await _storage.saveRegisteredDriverByPhone(
+        remoteUpdated.phone,
+        remoteUpdated.toJson(),
+      );
+      _resolveDriverState(remoteUpdated);
+      return true;
+    } catch (_) {
+      // Fallback to local persistence when offline
+      final updatedVehicle =
+          (current.assignedVehicle ??
+                  VehicleModel(
+                    registrationNumber: registrationNumber,
+                    vehicleType: VehicleType.fromString(vehicleType),
+                    makeModel: makeModel,
+                    year: 2024,
+                    equipmentList: const [],
+                    operatorAffiliation: operatorAffiliation,
+                    permitNumber: '',
+                    permitExpiryDate: '',
+                    insurancePolicyNumber: '',
+                    insuranceExpiryDate: '',
+                  ))
+              .copyWith(
+                registrationNumber: registrationNumber,
+                vehicleType: VehicleType.fromString(vehicleType),
+                makeModel: makeModel,
+                operatorAffiliation: operatorAffiliation,
+              );
 
-    final updatedDriver = current.copyWith(
-      name: name,
-      email: email,
-      emergencyContact: emergencyContact,
-      licenseNumber: licenseNumber,
-      assignedVehicle: updatedVehicle,
-    );
+      final updatedDriver = current.copyWith(
+        name: name,
+        email: email,
+        emergencyContact: emergencyContact,
+        licenseNumber: licenseNumber,
+        assignedVehicle: updatedVehicle,
+      );
 
-    await _storage.saveDriverProfile(updatedDriver.toJson());
-    await _storage.saveRegisteredDriverByPhone(updatedDriver.phone, updatedDriver.toJson());
-    _resolveDriverState(updatedDriver);
-    return true;
+      await _storage.saveDriverProfile(updatedDriver.toJson());
+      await _storage.saveRegisteredDriverByPhone(
+        updatedDriver.phone,
+        updatedDriver.toJson(),
+      );
+      _resolveDriverState(updatedDriver);
+      return true;
+    }
   }
 
   /// Refresh verification status
@@ -558,10 +729,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 final StateNotifierProvider<AuthNotifier, AuthState> authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final repo = ref.watch(authRepositoryProvider);
-  final storage = ref.watch(storageServiceProvider);
-  return AuthNotifier(repo, storage);
-});
+      final repo = ref.watch(authRepositoryProvider);
+      final storage = ref.watch(storageServiceProvider);
+      return AuthNotifier(repo, storage);
+    });
 
 final currentDriverProvider = Provider<DriverModel?>((ref) {
   return ref.watch(authNotifierProvider).driver;

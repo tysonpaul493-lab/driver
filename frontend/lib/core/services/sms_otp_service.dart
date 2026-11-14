@@ -81,28 +81,28 @@ class SmsOtpService {
             return SmsSendResult(
               isRealSmsSent: true,
               otp: otp,
-              message: 'Real OTP SMS delivered to $tenDigitPhone via Fast2SMS.',
-              provider: 'Fast2SMS',
+              message: 'SMS verification code delivered to $tenDigitPhone.',
+              provider: 'LifeRoute SMS Gateway',
             );
           }
         } catch (e) {
-          debugPrint('⚠️ [Fast2SMS] Gateway call failed: $e');
+          debugPrint('⚠️ [SMS Gateway] Gateway call failed: $e');
         }
       } else {
-        // 2Factor.in API Key (https://2factor.in)
+        // Alternate gateway fallback
         try {
-          debugPrint('📡 [SMS Gateway] Dispatching real OTP SMS via 2Factor to $tenDigitPhone...');
+          debugPrint('📡 [SMS Gateway] Dispatching real OTP SMS to $tenDigitPhone...');
           final url = 'https://2factor.in/API/V1/$apiKey/SMS/$tenDigitPhone/$otp/LIFEROUTE_DRIVER_OTP';
           final response = await _dio.get(url);
 
           if (response.statusCode == 200 &&
               response.data['Status']?.toString().toLowerCase() == 'success') {
-            debugPrint('✅ [2Factor] Real OTP SMS delivered successfully to $tenDigitPhone!');
+            debugPrint('✅ [SMS Gateway] Real OTP SMS delivered successfully to $tenDigitPhone!');
             return SmsSendResult(
               isRealSmsSent: true,
               otp: otp,
-              message: 'Real OTP SMS delivered to $tenDigitPhone via 2Factor.',
-              provider: '2Factor.in',
+              message: 'SMS verification code delivered to $tenDigitPhone.',
+              provider: 'LifeRoute SMS Gateway',
             );
           }
         } catch (e) {

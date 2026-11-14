@@ -43,23 +43,52 @@ class OnlineStatusState {
 class OnlineStatusNotifier extends StateNotifier<OnlineStatusState> {
   final DashboardRepository _repository;
   final Ref _ref;
+  late final Future<void> _initFuture;
 
   OnlineStatusNotifier(this._repository, this._ref) : super(const OnlineStatusState()) {
-    _initFromStorage();
+    _initFuture = _initFromStorage();
   }
 
   Future<void> _initFromStorage() async {
     final storage = _ref.read(storageServiceProvider);
     final isOnline = await storage.getOnlineStatus();
+    if (!mounted) return;
     state = state.copyWith(isOnline: isOnline);
+    await _ensureActiveServicesIfOnline();
+  }
 
-    if (isOnline) {
-      final driver = _ref.read(currentDriverProvider);
-      if (driver != null) {
-        _ref.read(reverbServiceProvider).connect(driver.id);
-        _ref.read(driverLocationProvider.notifier).startTracking();
-      }
+  Future<void> _ensureActiveServicesIfOnline() async {
+    if (!state.isOnline) return;
+    final driver = _ref.read(currentDriverProvider);
+    if (driver == null || !driver.verificationStatus.isApproved) return;
+
+    final reverb = _ref.read(reverbServiceProvider);
+    if (!reverb.isConnected) {
+      await reverb.connect(driver.id);
     }
+    await _ref.read(driverLocationProvider.notifier).startTracking();
+  }
+
+  /// Synchronize persisted online status, live WebSocket dispatch, and GPS telemetry after login or resume
+  Future<void> syncWithAuthenticatedDriver() async {
+    await _initFuture;
+    final storage = _ref.read(storageServiceProvider);
+    final driver = _ref.read(currentDriverProvider);
+    final storedOnline = await storage.getOnlineStatus();
+    final isOnline = storedOnline || (driver?.isOnline ?? false);
+    if (!mounted) return;
+    state = state.copyWith(isOnline: isOnline);
+    if (isOnline && driver != null && driver.verificationStatus.isApproved) {
+      final loc = _ref.read(driverLocationProvider);
+      try {
+        await _repository.toggleOnlineStatus(
+          true,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+        );
+      } catch (_) {}
+    }
+    await _ensureActiveServicesIfOnline();
   }
 
   /// Toggle online / offline switch with full pre-flight validation

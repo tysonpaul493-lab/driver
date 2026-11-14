@@ -23,8 +23,42 @@ class DistanceUtils {
     return earthRadius * c;
   }
 
+  /// Urban driving distance estimate in meters when only endpoints are known
+  static double calculateDrivingDistanceMeters(
+    double startLatitude,
+    double startLongitude,
+    double endLatitude,
+    double endLongitude,
+  ) {
+    final aerialMeters = calculateDistanceInMeters(
+      startLatitude,
+      startLongitude,
+      endLatitude,
+      endLongitude,
+    );
+    if (aerialMeters <= 20.0) return 0.0;
+    if (aerialMeters <= 50.0) return 100.0;
+    return (aerialMeters * 1.28) + 150.0;
+  }
+
+  /// Sum exact geodesic meters along a road polyline list of (lat, lng) coordinate pairs
+  static double calculatePolylineMeters(List<({double lat, double lng})> points) {
+    if (points.length < 2) return 0.0;
+    double total = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      total += calculateDistanceInMeters(
+        points[i].lat,
+        points[i].lng,
+        points[i + 1].lat,
+        points[i + 1].lng,
+      );
+    }
+    return total;
+  }
+
   /// Format distance string (e.g. "850 m" or "4.2 km")
   static String formatDistance(double meters) {
+    if (meters <= 0) return '0 m';
     if (meters < 1000) {
       return '${meters.round()} m';
     } else {

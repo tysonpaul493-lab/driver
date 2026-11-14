@@ -29,7 +29,9 @@ enum VerificationStatus {
   }
 
   bool get isApproved => this == VerificationStatus.approved;
-  bool get isUnderReview => this == VerificationStatus.pending || this == VerificationStatus.underReview;
+  bool get isUnderReview =>
+      this == VerificationStatus.pending ||
+      this == VerificationStatus.underReview;
   bool get isRejected => this == VerificationStatus.rejected;
 }
 
@@ -70,37 +72,33 @@ class DriverModel {
   });
 
   bool get canGoOnline =>
-      verificationStatus.isApproved &&
-      (assignedVehicle?.isEligible ?? false);
+      verificationStatus.isApproved && (assignedVehicle?.isEligible ?? false);
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
     return DriverModel(
       id: json['id'] as int? ?? 1,
-      name: json['name'] as String? ?? 'Ambulance Pilot',
+      name: (json['name'] as String?) ?? '',
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String? ?? '',
       emergencyContact: json['emergency_contact'] as String? ?? '',
       licenseNumber: json['license_number'] as String? ?? '',
       licenseExpiryDate: json['license_expiry_date'] as String? ?? '',
-      verificationStatus: VerificationStatus.fromString(json['verification_status'] as String?),
+      verificationStatus: VerificationStatus.fromString(
+        json['verification_status'] as String?,
+      ),
       rejectionReason: json['rejection_reason'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       assignedVehicle: json['assigned_vehicle'] != null
-          ? VehicleModel.fromJson(json['assigned_vehicle'] as Map<String, dynamic>)
+          ? VehicleModel.fromJson(
+              json['assigned_vehicle'] as Map<String, dynamic>,
+            )
           : null,
       isOnline: json['is_online'] as bool? ?? false,
       rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
       completedTripsCount: json['completed_trips_count'] as int? ?? 0,
       documentsUploaded: json['documents_uploaded'] != null
           ? Map<String, bool>.from(json['documents_uploaded'] as Map)
-          : {
-              'driving_license_front': true,
-              'driving_license_back': true,
-              'vehicle_registration': true,
-              'ambulance_permit': true,
-              'commercial_driver_badge': true,
-              'insurance_policy': true,
-            },
+          : <String, bool>{},
     );
   }
 

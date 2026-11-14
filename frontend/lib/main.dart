@@ -1,9 +1,11 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/constants/api_constants.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_theme.dart';
-import 'core/notifications/fcm_service.dart';
+import 'core/network/dio_client.dart';
+import 'core/services/driver_notification_service.dart';
+import 'core/storage/secure_storage_service.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/phone_login_screen.dart';
 import 'features/auth/screens/splash_screen.dart';
@@ -11,17 +13,27 @@ import 'features/dashboard/screens/driver_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await DriverNotificationService.instance.initialize();
 
-  // Try to initialize Firebase Cloud Messaging; tolerate running if google-services.json not configured yet
-  try {
-    await Firebase.initializeApp();
-  } catch (e) {
-    debugPrint('[Firebase] Running without Firebase configuration or on unregistered platform: $e');
+  final storage = SecureStorageService();
+  await storage.init();
+  final savedServerHost = await storage.getCustomApiUrl();
+  ApiConstants.setServerHost(savedServerHost);
+  if (!ApiConstants.hasCustomServerHost) {
+    try {
+      await DioClient.resolveReachableHost().timeout(
+        const Duration(milliseconds: 2500),
+        onTimeout: () => null,
+      );
+    } catch (_) {}
   }
 
   runApp(
-    const ProviderScope(
-      child: LifeRouteDriverApp(),
+    ProviderScope(
+      overrides: [
+        storageServiceProvider.overrideWithValue(storage),
+      ],
+      child: const LifeRouteDriverApp(),
     ),
   );
 }
@@ -34,36 +46,6 @@ class LifeRouteDriverApp extends ConsumerStatefulWidget {
 }
 
 class _LifeRouteDriverAppState extends ConsumerState<LifeRouteDriverApp> {
-  FcmService? _fcmService;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initFcm();
-    });
-  }
-
-  Future<void> _initFcm() async {
-    if (Firebase.apps.isEmpty) {
-      debugPrint('[FCM] Firebase not configured; skipping FCM initialization.');
-      return;
-    }
-    try {
-      final dio = ref.read(dioClientProvider);
-      final storage = ref.read(storageServiceProvider);
-      _fcmService = FcmService(dio, storage);
-      await _fcmService?.init();
-    } catch (e) {
-      debugPrint('[FCM] Error initializing FCM service: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _fcmService?.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {

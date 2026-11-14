@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage_service.dart';
@@ -12,17 +13,34 @@ class AuthRepository {
 
   AuthRepository(this._dioClient, this._storageService);
 
-  /// Request phone OTP for login
+  /// Request phone OTP for login via configured SMS gateway
   Future<Map<String, dynamic>> sendOtp(String phone) async {
     final response = await _dioClient.post(
       ApiConstants.sendOtp,
       data: {'phone': phone},
+      options: Options(
+        sendTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 20),
+      ),
     );
     return response as Map<String, dynamic>;
   }
 
+  /// Check if a phone number is registered on the dispatch server
+  Future<bool> checkPhoneRegistered(String phone) async {
+    final response = await _dioClient.post(
+      '/driver/auth/check-phone',
+      data: {'phone': phone},
+    );
+    final data = response as Map<String, dynamic>;
+    return data['is_registered'] == true || data['registered'] == true;
+  }
+
   /// Verify OTP and store Sanctum token
-  Future<AuthResponse> verifyOtp(String phone, String otp) async {
+  Future<AuthResponse> verifyOtp(
+    String phone,
+    String otp,
+  ) async {
     final response = await _dioClient.post(
       ApiConstants.verifyOtp,
       data: {
@@ -43,10 +61,51 @@ class AuthRepository {
     return authResponse;
   }
 
-  /// Register a new ambulance driver with vehicle specifications
+  /// Sign in using mobile number and driver account password
+  Future<AuthResponse> loginWithPassword(String phone, String password) async {
+    final response = await _dioClient.post(
+      ApiConstants.loginWithPassword,
+      data: {
+        'phone': phone,
+        'password': password,
+        'device_name': 'Driver Mobile App',
+      },
+    );
+
+    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    await _storageService.saveAuthToken(authResponse.token);
+    await _storageService.saveDriverId(authResponse.driver.id);
+    await _storageService.saveDriverProfile(authResponse.driver.toJson());
+    await _storageService.setOnlineStatus(authResponse.driver.isOnline);
+
+    return authResponse;
+  }
+
+  /// Reset password directly for driver account
+  Future<AuthResponse> resetPassword(String phone, String newPassword, String confirmPassword) async {
+    final response = await _dioClient.post(
+      ApiConstants.resetPassword,
+      data: {
+        'phone': phone,
+        'password': newPassword,
+        'password_confirmation': confirmPassword,
+      },
+    );
+
+    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    await _storageService.saveAuthToken(authResponse.token);
+    await _storageService.saveDriverId(authResponse.driver.id);
+    await _storageService.saveDriverProfile(authResponse.driver.toJson());
+    await _storageService.setOnlineStatus(authResponse.driver.isOnline);
+
+    return authResponse;
+  }
+
+  /// Register a new ambulance driver with vehicle specifications and password
   Future<AuthResponse> registerDriver({
     required String name,
     required String phone,
+    String? password,
     required String email,
     required String emergencyContact,
     required String licenseNumber,
@@ -67,6 +126,7 @@ class AuthRepository {
       data: {
         'name': name,
         'phone': phone,
+        if (password != null && password.isNotEmpty) 'password': password,
         'email': email,
         'emergency_contact': emergencyContact,
         'license_number': licenseNumber,
@@ -87,14 +147,14 @@ class AuthRepository {
     );
 
     final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
-    await _storageService.saveAuthToken(authResponse.token);
-    await _storageService.saveDriverId(authResponse.driver.id);
-    await _storageService.saveDriverProfile(authResponse.driver.toJson());
+    // Registration must not set an active login session token: driver must log in with their ID and password
+    await _storageService.deleteAuthToken();
+    await _storageService.saveRegisteredDriverByPhone(phone, authResponse.driver.toJson());
 
     return authResponse;
   }
 
-  /// Upload compliance and license documents to Laravel backend
+  /// Upload compliance and license documents to dispatch backend
   Future<Map<String, dynamic>> uploadDocument({
     required File file,
     required String documentType,
@@ -110,6 +170,57 @@ class AuthRepository {
       },
     );
     return response as Map<String, dynamic>;
+  }
+
+  /// Upload compliance documents from raw bytes (Web-safe)
+  Future<Map<String, dynamic>> uploadDocumentBytes({
+    required List<int> bytes,
+    required String fileName,
+    required String documentType,
+    String? expiryDate,
+  }) async {
+    final response = await _dioClient.uploadFileBytes(
+      ApiConstants.uploadDocuments,
+      bytes: bytes,
+      fileName: fileName,
+      fileField: 'document',
+      extraFields: {
+        'document_type': documentType,
+        'expiry_date': ?expiryDate,
+      },
+    );
+    return response as Map<String, dynamic>;
+  }
+
+  /// Update driver and ambulance profile fields on dispatch backend
+  Future<DriverModel> updateProfile({
+    required String name,
+    required String email,
+    required String emergencyContact,
+    required String licenseNumber,
+    required String registrationNumber,
+    required String vehicleType,
+    required String makeModel,
+    required String operatorAffiliation,
+  }) async {
+    final response = await _dioClient.put(
+      ApiConstants.profile,
+      data: {
+        'name': name,
+        'email': email,
+        'emergency_contact': emergencyContact,
+        'license_number': licenseNumber,
+        'ambulance': {
+          'registration_number': registrationNumber,
+          'vehicle_type': vehicleType,
+          'make_model': makeModel,
+          'operator_affiliation': operatorAffiliation,
+        },
+      },
+    );
+    final driver = DriverModel.fromJson(response['driver'] ?? response);
+    await _storageService.saveDriverProfile(driver.toJson());
+    return driver;
   }
 
   /// Fetch updated driver profile and vehicle info

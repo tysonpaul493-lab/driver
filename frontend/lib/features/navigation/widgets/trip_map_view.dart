@@ -1,10 +1,13 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
-import '../../../core/constants/app_colors.dart';
 
+import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/distance_utils.dart';
 
 /// Real-time interactive high-accuracy map with live ambulance telemetry,
 /// patient pickup, and hospital routing using OpenStreetMap / CartoDB tiles.
@@ -19,6 +22,7 @@ class TripMapView extends StatefulWidget {
   final bool isHeadingToHospital;
   final double accuracy;
   final VoidCallback? onRecenter;
+  final ValueChanged<double>? onRouteDistanceUpdated;
   final double? hospitalLat;
   final double? hospitalLng;
   final String? hospitalName;
@@ -37,6 +41,7 @@ class TripMapView extends StatefulWidget {
     this.isHeadingToHospital = false,
     this.accuracy = 8.0,
     this.onRecenter,
+    this.onRouteDistanceUpdated,
     this.hospitalLat,
     this.hospitalLng,
     this.hospitalName,
@@ -52,6 +57,7 @@ class TripMapView extends StatefulWidget {
 class _TripMapViewState extends State<TripMapView> {
   final MapController _mapController = MapController();
   double _currentZoom = 15.5;
+  bool _autoFollow = true;
   List<ll.LatLng> _routePoints = [];
 
   @override
@@ -63,9 +69,10 @@ class _TripMapViewState extends State<TripMapView> {
   @override
   void didUpdateWidget(covariant TripMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentLat != widget.currentLat ||
-        oldWidget.currentLng != widget.currentLng) {
-      // Smoothly update map center when driver moves
+    if (_autoFollow &&
+        (oldWidget.currentLat != widget.currentLat ||
+            oldWidget.currentLng != widget.currentLng)) {
+      // Smoothly update map center when driver moves unless user manually panned away
       try {
         _mapController.move(
           ll.LatLng(widget.currentLat, widget.currentLng),
@@ -82,62 +89,102 @@ class _TripMapViewState extends State<TripMapView> {
     }
   }
 
+  static bool _isValidCoord(double lat, double lng) =>
+      lat.isFinite &&
+      lng.isFinite &&
+      !(lat == 0.0 && lng == 0.0) &&
+      lat.abs() <= 90.0 &&
+      lng.abs() <= 180.0;
+
   Future<void> _fetchRoadRoute() async {
     final startLat = widget.currentLat;
     final startLng = widget.currentLng;
     final endLat = widget.targetLat;
     final endLng = widget.targetLng;
 
-    try {
-      final dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 3)));
-      final url =
-          'https://router.project-osrm.org/route/v1/driving/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson';
-      final response = await dio.get(url);
-      if (response.statusCode == 200 && response.data != null) {
-        final routes = response.data['routes'] as List?;
-        if (routes != null && routes.isNotEmpty) {
-          final geometry = routes[0]['geometry'];
-          final coords = geometry['coordinates'] as List?;
-          if (coords != null && coords.isNotEmpty) {
-            final points = coords
-                .map((c) => ll.LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
-                .toList();
-            if (mounted && points.length >= 2) {
-              setState(() => _routePoints = points);
-              return;
+    if (!_isValidCoord(startLat, startLng) || !_isValidCoord(endLat, endLng)) {
+      return;
+    }
+
+    if (DistanceUtils.calculateDistanceInMeters(startLat, startLng, endLat, endLng) < 15.0) {
+      if (mounted) {
+        setState(() => _routePoints = [ll.LatLng(startLat, startLng), ll.LatLng(endLat, endLng)]);
+        widget.onRouteDistanceUpdated?.call(0.0);
+      }
+      return;
+    }
+
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 8),
+        headers: {
+          if (!kIsWeb) 'User-Agent': 'LifeRouteDriver/1.0',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    const mirrors = [
+      'https://router.project-osrm.org/route/v1/driving',
+      'https://routing.openstreetmap.de/routed-car/route/v1/driving',
+    ];
+
+    for (final mirror in mirrors) {
+      try {
+        final url =
+            '$mirror/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson';
+        final response = await dio.get(url);
+        if (response.statusCode == 200 && response.data is Map) {
+          final routes = response.data['routes'] as List?;
+          if (routes != null && routes.isNotEmpty) {
+            final geometry = routes[0]['geometry'];
+            final coords = geometry?['coordinates'] as List?;
+            final apiDistMeters = (routes[0]['distance'] as num?)?.toDouble();
+            if (coords != null && coords.isNotEmpty) {
+              final points = coords
+                  .whereType<List>()
+                  .where((c) => c.length >= 2)
+                  .map(
+                    (c) => ll.LatLng(
+                      (c[1] as num).toDouble(),
+                      (c[0] as num).toDouble(),
+                    ),
+                  )
+                  .toList();
+              if (mounted && points.length >= 2) {
+                setState(() => _routePoints = points);
+                final roadMeters = (apiDistMeters != null && apiDistMeters > 0)
+                    ? apiDistMeters
+                    : DistanceUtils.calculatePolylineMeters(
+                        points.map((p) => (lat: p.latitude, lng: p.longitude)).toList(),
+                      );
+                widget.onRouteDistanceUpdated?.call(roadMeters);
+                return;
+              }
             }
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
-    // Realistic road grid waypoints fallback
     if (mounted) {
       setState(() {
-        _routePoints = _generateRoadGridWaypoints(startLat, startLng, endLat, endLng);
+        _routePoints = [ll.LatLng(startLat, startLng), ll.LatLng(endLat, endLng)];
       });
+      widget.onRouteDistanceUpdated?.call(
+        DistanceUtils.calculateDrivingDistanceMeters(
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+        ),
+      );
     }
   }
 
-  List<ll.LatLng> _generateRoadGridWaypoints(
-      double lat1, double lng1, double lat2, double lng2) {
-    final List<ll.LatLng> points = [ll.LatLng(lat1, lng1)];
-    final double dLat = lat2 - lat1;
-    final double dLng = lng2 - lng1;
-
-    // Follow street turns along the city avenue grid
-    points.add(ll.LatLng(lat1 + dLat * 0.25, lng1));
-    points.add(ll.LatLng(lat1 + dLat * 0.25, lng1 + dLng * 0.35));
-    points.add(ll.LatLng(lat1 + dLat * 0.65, lng1 + dLng * 0.35));
-    points.add(ll.LatLng(lat1 + dLat * 0.65, lng1 + dLng * 0.75));
-    points.add(ll.LatLng(lat1 + dLat * 0.85, lng1 + dLng * 0.75));
-    points.add(ll.LatLng(lat1 + dLat * 0.85, lng2));
-    points.add(ll.LatLng(lat2, lng2));
-
-    return points;
-  }
-
   void _recenterOnDriver() {
+    _autoFollow = true;
     _currentZoom = 16.5;
     try {
       _mapController.move(
@@ -149,6 +196,7 @@ class _TripMapViewState extends State<TripMapView> {
   }
 
   void _fitRouteBounds() {
+    _autoFollow = false;
     try {
       final points = <ll.LatLng>[
         ll.LatLng(widget.currentLat, widget.currentLng),
@@ -179,10 +227,7 @@ class _TripMapViewState extends State<TripMapView> {
       );
 
       _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(50),
-        ),
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)),
       );
     } catch (_) {}
   }
@@ -190,20 +235,14 @@ class _TripMapViewState extends State<TripMapView> {
   void _zoomIn() {
     _currentZoom = math.min(18.5, _currentZoom + 1.0);
     try {
-      _mapController.move(
-        _mapController.camera.center,
-        _currentZoom,
-      );
+      _mapController.move(_mapController.camera.center, _currentZoom);
     } catch (_) {}
   }
 
   void _zoomOut() {
     _currentZoom = math.max(5.0, _currentZoom - 1.0);
     try {
-      _mapController.move(
-        _mapController.camera.center,
-        _currentZoom,
-      );
+      _mapController.move(_mapController.camera.center, _currentZoom);
     } catch (_) {}
   }
 
@@ -216,7 +255,8 @@ class _TripMapViewState extends State<TripMapView> {
         ? ll.LatLng(widget.pickupLat!, widget.pickupLng!)
         : (!widget.isHeadingToHospital ? targetPoint : null);
 
-    final hospitalPoint = (widget.hospitalLat != null && widget.hospitalLng != null)
+    final hospitalPoint =
+        (widget.hospitalLat != null && widget.hospitalLng != null)
         ? ll.LatLng(widget.hospitalLat!, widget.hospitalLng!)
         : (widget.isHeadingToHospital ? targetPoint : null);
 
@@ -299,11 +339,19 @@ class _TripMapViewState extends State<TripMapView> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.person_pin_circle_rounded, size: 12, color: AppColors.emergencyRed),
+                    Icon(
+                      Icons.person_pin_circle_rounded,
+                      size: 12,
+                      color: AppColors.emergencyRed,
+                    ),
                     SizedBox(width: 4),
                     Text(
                       'Patient Pickup',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.emergencyRed),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.emergencyRed,
+                      ),
                     ),
                   ],
                 ),
@@ -366,7 +414,11 @@ class _TripMapViewState extends State<TripMapView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.local_hospital_rounded, size: 13, color: AppColors.statusGreen),
+                    const Icon(
+                      Icons.local_hospital_rounded,
+                      size: 13,
+                      color: AppColors.statusGreen,
+                    ),
                     const SizedBox(width: 4),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 140),
@@ -374,7 +426,11 @@ class _TripMapViewState extends State<TripMapView> {
                         widget.hospitalName ?? 'Hospital Destination',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF065F46)),
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF065F46),
+                        ),
                       ),
                     ),
                   ],
@@ -412,9 +468,7 @@ class _TripMapViewState extends State<TripMapView> {
 
     return Stack(
       children: [
-        Positioned.fill(
-          child: Container(color: const Color(0xFF1E293B)),
-        ),
+        Positioned.fill(child: Container(color: const Color(0xFF1E293B))),
 
         FlutterMap(
           mapController: _mapController,
@@ -423,6 +477,12 @@ class _TripMapViewState extends State<TripMapView> {
             initialZoom: _currentZoom,
             minZoom: 4.0,
             maxZoom: 19.0,
+            onPositionChanged: (camera, hasGesture) {
+              _currentZoom = camera.zoom;
+              if (hasGesture && _autoFollow) {
+                _autoFollow = false;
+              }
+            },
           ),
           children: [
             // Official Google Maps Roadmap tile layer (High-performance, daylight vector roads & POIs)
@@ -456,10 +516,11 @@ class _TripMapViewState extends State<TripMapView> {
                       ? _routePoints
                       : [driverPoint, targetPoint],
                   strokeWidth: 9.0,
-                  color: (widget.isHeadingToHospital
-                          ? AppColors.statusGreen
-                          : const Color(0xFF4285F4))
-                      .withValues(alpha: 0.35),
+                  color:
+                      (widget.isHeadingToHospital
+                              ? AppColors.statusGreen
+                              : const Color(0xFF4285F4))
+                          .withValues(alpha: 0.35),
                 ),
                 // Route core line
                 Polyline(
@@ -475,9 +536,7 @@ class _TripMapViewState extends State<TripMapView> {
             ),
 
             // Markers Layer
-            MarkerLayer(
-              markers: markers,
-            ),
+            MarkerLayer(markers: markers),
           ],
         ),
 
@@ -571,15 +630,15 @@ class _TripMapViewState extends State<TripMapView> {
             ],
           ),
         ),
-        // Google Maps Official Attribution Banner (Bottom-Left)
+        // Clean In-App Map Attribution Badge (Bottom-Left)
         Positioned(
           bottom: 12,
           left: 12,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(4),
+              color: Colors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -587,19 +646,24 @@ class _TripMapViewState extends State<TripMapView> {
                 ),
               ],
             ),
-            child: RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                children: [
-                  TextSpan(text: 'G', style: TextStyle(color: Color(0xFF4285F4))),
-                  TextSpan(text: 'o', style: TextStyle(color: Color(0xFFEA4335))),
-                  TextSpan(text: 'o', style: TextStyle(color: Color(0xFFFBBC05))),
-                  TextSpan(text: 'g', style: TextStyle(color: Color(0xFF4285F4))),
-                  TextSpan(text: 'l', style: TextStyle(color: Color(0xFF34A853))),
-                  TextSpan(text: 'e', style: TextStyle(color: Color(0xFFEA4335))),
-                  TextSpan(text: ' Maps', style: TextStyle(color: Color(0xFF5F6368), fontWeight: FontWeight.w600)),
-                ],
-              ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.navigation_rounded,
+                  size: 12,
+                  color: AppColors.ambulanceTeal,
+                ),
+                SizedBox(width: 4),
+                Text(
+                  'LifeRoute Live Map',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage_service.dart';
@@ -33,12 +35,15 @@ class DriverLocationService {
 
   StreamSubscription<Position>? _positionSubscription;
   Timer? _staleGpsTimer;
+  Timer? _heartbeatTimer;
   DateTime? _lastPingTime;
+  bool _isTelemetryInFlight = false;
   Position? _currentPosition;
   String? _activeBookingReference;
 
   final _telemetryController = StreamController<LocationTelemetry>.broadcast();
-  Stream<LocationTelemetry> get onTelemetryUpdated => _telemetryController.stream;
+  Stream<LocationTelemetry> get onTelemetryUpdated =>
+      _telemetryController.stream;
 
   Position? get currentPosition => _currentPosition;
   bool get isTracking => _positionSubscription != null;
@@ -70,27 +75,46 @@ class DriverLocationService {
     return true;
   }
 
+  Future<Position?> _acquireBestPosition({
+    Duration highTimeout = const Duration(seconds: 5),
+    Duration fallbackTimeout = const Duration(seconds: 3),
+  }) async {
+    final attempts = <(LocationAccuracy, Duration)>[
+      (LocationAccuracy.high, highTimeout),
+      (LocationAccuracy.medium, fallbackTimeout),
+      (LocationAccuracy.low, fallbackTimeout),
+    ];
+
+    for (final (accuracy, timeout) in attempts) {
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: accuracy,
+          timeLimit: timeout,
+        );
+        return pos;
+      } catch (_) {
+        // Fallback to coarser accuracy when indoor/cold GPS times out
+      }
+    }
+
+    try {
+      return await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Get current instantaneous fix
   Future<Position?> getCurrentPosition() async {
     try {
       final hasPermission = await checkAndRequestPermissions();
       if (!hasPermission) return null;
 
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 6),
-        );
+      final position = await _acquireBestPosition();
+      if (position != null) {
         _currentPosition = position;
-        return position;
-      } catch (_) {
-        final last = await Geolocator.getLastKnownPosition();
-        if (last != null) {
-          _currentPosition = last;
-          return last;
-        }
       }
-      return null;
+      return position;
     } catch (e) {
       debugPrint('[LocationService] Error fetching current position: $e');
       return null;
@@ -99,58 +123,98 @@ class DriverLocationService {
 
   /// Start live location tracking during an active trip or when online
   Future<void> startTracking({String? bookingReference}) async {
+    // Do not wipe active-trip booking telemetry if a generic online tracking call fires concurrently
+    if (isTracking &&
+        bookingReference == null &&
+        _activeBookingReference != null) {
+      return;
+    }
+
     final hasPermission = await checkAndRequestPermissions();
     if (!hasPermission) return;
 
+    await stopTracking(); // Stop prior tracking before setting active booking reference
     _activeBookingReference = bookingReference;
-    await stopTracking(); // Clean any previous subscription
 
-    // Balanced location settings: High accuracy, 10m movement filter to preserve battery
+    // High accuracy, 3m movement filter + periodic heartbeat so stationary phones still update live
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // Only fire when vehicle moves 10 meters
+      distanceFilter: 3,
     );
 
     _resetStaleTimer();
 
-    _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen(
-      (Position position) {
-        _currentPosition = position;
-        _resetStaleTimer();
-
-        final telemetry = LocationTelemetry(
-          latitude: position.latitude,
-          longitude: position.longitude,
-          accuracy: position.accuracy,
-          heading: position.heading,
-          speed: position.speed,
-          timestamp: position.timestamp,
-          isGpsStale: false,
+    _positionSubscription =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (Position position) {
+            _emitPosition(position);
+          },
+          onError: (e) {
+            debugPrint('[LocationService] Position stream error: $e');
+          },
         );
 
-        _telemetryController.add(telemetry);
-        _sendTelemetryToBackend(position);
-      },
-      onError: (e) {
-        debugPrint('[LocationService] Position stream error: $e');
-      },
-    );
+    // Immediately broadcast an initial GPS fix without waiting for physical movement
+    final initialPos = await getCurrentPosition();
+    if (initialPos != null && isTracking) {
+      await _emitPosition(initialPos, forceNetworkSync: true);
+    }
+
+    // Periodic 4-second telemetry heartbeat keeps live map & ETA syncing even while parked
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (!isTracking) return;
+      final pos =
+          await _acquireBestPosition(
+            highTimeout: const Duration(seconds: 3),
+            fallbackTimeout: const Duration(seconds: 2),
+          ) ??
+          _currentPosition;
+      if (pos != null && isTracking) {
+        await _emitPosition(pos);
+      }
+    });
   }
 
-  /// Transmit GPS packet to Laravel backend
-  Future<void> _sendTelemetryToBackend(Position position) async {
+  Future<void> _emitPosition(
+    Position position, {
+    bool forceNetworkSync = false,
+  }) async {
+    _currentPosition = position;
+    _resetStaleTimer();
+
+    final telemetry = LocationTelemetry(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracy: position.accuracy,
+      heading: position.heading,
+      speed: position.speed,
+      timestamp: position.timestamp,
+      isGpsStale: false,
+    );
+
+    _telemetryController.add(telemetry);
+    await _sendTelemetryToBackend(position, force: forceNetworkSync);
+  }
+
+  /// Transmit GPS packet to dispatch backend
+  Future<void> _sendTelemetryToBackend(
+    Position position, {
+    bool force = false,
+  }) async {
     final now = DateTime.now();
-    // Throttle network transmissions to once every 3.5 seconds minimum to save mobile data
-    if (_lastPingTime != null && now.difference(_lastPingTime!).inMilliseconds < 3500) {
+    // Throttle network transmissions to once every 4 seconds minimum to save mobile data
+    if (!force && _lastPingTime != null && now.difference(_lastPingTime!).inMilliseconds < 4000) {
+      return;
+    }
+    if (_isTelemetryInFlight) {
       return;
     }
 
     _lastPingTime = now;
-    final driverId = await _storageService.getDriverId();
-
+    _isTelemetryInFlight = true;
     try {
+      final driverId = await _storageService.getDriverId();
       await _dioClient.post(
         ApiConstants.updateLocation,
         data: {
@@ -167,6 +231,8 @@ class DriverLocationService {
     } catch (e) {
       // In poor network conditions, silently tolerate dropped pings; the next move will transmit
       debugPrint('[LocationService] Telemetry ping skipped/dropped: $e');
+    } finally {
+      _isTelemetryInFlight = false;
     }
   }
 
@@ -193,6 +259,8 @@ class DriverLocationService {
   Future<void> stopTracking() async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     _staleGpsTimer?.cancel();
     _staleGpsTimer = null;
     _activeBookingReference = null;

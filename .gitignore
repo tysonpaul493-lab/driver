@@ -3,10 +3,19 @@
 .idea/
 *.iml
 *.log
+.phpunit.result.cache
 
 # Backend
+backend/vendor/
 backend/node_modules/
 backend/.env
+backend/.env.backup
+backend/.env.production
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/*.key
 
 # Frontend
 frontend/.dart_tool/

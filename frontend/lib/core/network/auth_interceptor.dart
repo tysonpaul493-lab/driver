@@ -28,7 +28,9 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.response?.statusCode == 401) {
+    final path = err.requestOptions.path;
+    final isAuthEndpoint = path.contains('/auth/');
+    if (err.response?.statusCode == 401 && !isAuthEndpoint) {
       // Sanctum token expired or revoked
       onUnauthorized?.call();
     }

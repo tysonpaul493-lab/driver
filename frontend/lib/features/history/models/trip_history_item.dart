@@ -89,7 +89,7 @@ class TripHistoryItem {
     final earnVal = (json['earnings'] as num?)?.toDouble();
     final calcEarn = earnVal ?? (200.0 + (calcDistKm * 30.0));
 
-    final completedStr = json['completed_at'] ?? json['updated_at'] ?? json['accepted_at'];
+    final completedStr = json['completed_at'] ?? json['updated_at'] ?? json['accepted_at'] ?? json['created_at'];
     DateTime date = DateTime.now();
     if (completedStr != null) {
       date = DateTime.tryParse(completedStr.toString()) ?? DateTime.now();
@@ -117,7 +117,7 @@ class TripHistoryItem {
       id: idVal,
       bookingReference: json['booking_reference'] as String? ?? 'BK-${DateTime.now().millisecondsSinceEpoch % 90000 + 10000}',
       patientName: json['patient_name'] as String? ?? 'Emergency Patient',
-      patientPhone: json['patient_phone'] as String? ?? json['contact_number'] as String? ?? '+91 98450 12345',
+      patientPhone: json['patient_phone'] as String? ?? json['contact_number'] as String?,
       pickupAddress: json['pickup_address'] as String? ?? 'Pickup Location',
       destinationHospital: json['destination_hospital'] as String? ?? 'Regional Hospital & Trauma Unit',
       emergencyCategory: json['emergency_category'] as String? ?? 'Critical',

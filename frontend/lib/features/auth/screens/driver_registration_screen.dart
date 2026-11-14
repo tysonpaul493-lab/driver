@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/phone_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../models/vehicle_model.dart';
 import '../providers/auth_provider.dart';
-import 'document_upload_screen.dart';
+import 'phone_login_screen.dart';
 
 class DriverRegistrationScreen extends ConsumerStatefulWidget {
-  const DriverRegistrationScreen({super.key});
+  final String? initialPhone;
+  const DriverRegistrationScreen({super.key, this.initialPhone});
 
   @override
   ConsumerState<DriverRegistrationScreen> createState() =>
@@ -21,6 +23,10 @@ class _DriverRegistrationScreenState
   // Driver details controllers
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   final _emailController = TextEditingController();
   final _emergencyContactController = TextEditingController();
   final _licenseNumberController = TextEditingController();
@@ -50,9 +56,23 @@ class _DriverRegistrationScreenState
   };
 
   @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialPhone?.trim() ?? '';
+    if (initial.isNotEmpty) {
+      final clean = initial.replaceAll(RegExp(r'\D'), '');
+      _phoneController.text = clean.length >= 10
+          ? clean.substring(clean.length - 10)
+          : clean;
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _emailController.dispose();
     _emergencyContactController.dispose();
     _licenseNumberController.dispose();
@@ -89,14 +109,32 @@ class _DriverRegistrationScreenState
       return;
     }
 
+    if (_passwordController.text.trim().length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+      return;
+    }
+    if (_passwordController.text.trim() != _confirmPasswordController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Create Password and Confirm Password do not match')),
+      );
+      return;
+    }
+
     final selectedEquipment = _equipmentChecked.entries
         .where((e) => e.value)
         .map((e) => e.key)
         .toList();
 
+    final formattedPhone = PhoneUtils.formatInternationalPhone(
+      _phoneController.text.trim(),
+    );
+
     final success = await ref.read(authNotifierProvider.notifier).register(
           name: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
+          phone: formattedPhone,
+          password: _passwordController.text.trim(),
           email: _emailController.text.trim(),
           emergencyContact: _emergencyContactController.text.trim(),
           licenseNumber: _licenseNumberController.text.trim(),
@@ -113,9 +151,32 @@ class _DriverRegistrationScreenState
           insuranceExpiryDate: _insuranceExpiryController.text.trim(),
         );
 
-    if (success && mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DocumentUploadScreen()),
+    if (!mounted) return;
+    if (success) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => PhoneLoginScreen(initialPhone: formattedPhone),
+        ),
+        (route) => false,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.statusGreen,
+          content: Text(
+            'Registration successful! Please log in with your registered mobile and password.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    } else {
+      final err = ref.read(authNotifierProvider).errorMessage ??
+          'Unable to complete driver registration. Please check your details.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.emergencyRed,
+        ),
       );
     }
   }
@@ -190,7 +251,12 @@ class _DriverRegistrationScreenState
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(labelText: 'Mobile Number *'),
-                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                        validator: (v) {
+                          final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                          if (digits.isEmpty) return 'Required';
+                          if (digits.length < 7 || digits.length > 15) return 'Invalid phone';
+                          return null;
+                        },
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -200,6 +266,58 @@ class _DriverRegistrationScreenState
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(labelText: 'Emergency Contact *'),
                         validator: (v) => v!.isEmpty ? 'Required' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Create Password *',
+                          hintText: 'Min 6 chars',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().length < 6) {
+                            return 'Min 6 chars';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password *',
+                          hintText: 'Re-enter password',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                              size: 18,
+                            ),
+                            onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v != _passwordController.text) {
+                            return 'Does not match';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                   ],
@@ -313,28 +431,31 @@ class _DriverRegistrationScreenState
 
                 // 4. ONBOARD MEDICAL EQUIPMENT
                 _buildSectionHeader('4. Onboard Equipment Inventory', Icons.medical_services_outlined),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceDark,
+                Material(
+                  color: AppColors.surfaceDark,
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.borderDark),
+                    side: const BorderSide(color: AppColors.borderDark),
                   ),
-                  child: Column(
-                    children: _equipmentChecked.keys.map((item) {
-                      return CheckboxListTile(
-                        dense: true,
-                        activeColor: AppColors.ambulanceTeal,
-                        checkColor: Colors.white,
-                        title: Text(item, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5)),
-                        value: _equipmentChecked[item],
-                        onChanged: (val) {
-                          setState(() {
-                            _equipmentChecked[item] = val ?? false;
-                          });
-                        },
-                      );
-                    }).toList(),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      children: _equipmentChecked.keys.map((item) {
+                        return CheckboxListTile(
+                          dense: true,
+                          activeColor: AppColors.ambulanceTeal,
+                          checkColor: Colors.white,
+                          title: Text(item, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5)),
+                          value: _equipmentChecked[item],
+                          onChanged: (val) {
+                            setState(() {
+                              _equipmentChecked[item] = val ?? false;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
 
