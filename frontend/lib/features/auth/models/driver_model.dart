@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'vehicle_model.dart';
 
 /// Driver verification status in the system
@@ -74,9 +75,26 @@ class DriverModel {
   bool get canGoOnline =>
       verificationStatus.isApproved && (assignedVehicle?.isEligible ?? false);
 
-  factory DriverModel.fromJson(Map<String, dynamic> json) {
+  factory DriverModel.fromJson(dynamic raw) {
+    dynamic source = raw;
+    if (source is String) {
+      try {
+        source = jsonDecode(source);
+      } catch (_) {}
+    }
+    final json = source is Map
+        ? Map<String, dynamic>.from(source)
+        : (source is List && source.isNotEmpty && source.first is Map
+            ? Map<String, dynamic>.from(source.first)
+            : <String, dynamic>{});
+
     final Map<String, bool> docs = {};
-    final rawDocs = json['documents_uploaded'];
+    var rawDocs = json['documents_uploaded'];
+    if (rawDocs is String) {
+      try {
+        rawDocs = jsonDecode(rawDocs);
+      } catch (_) {}
+    }
     if (rawDocs is Map) {
       rawDocs.forEach((k, v) {
         docs[k.toString()] = v == true || v == 1 || v.toString() == 'true';
@@ -87,10 +105,17 @@ class DriverModel {
       }
     }
 
-    final rawVehicle = json['assigned_vehicle'];
+    var rawVehicle = json['assigned_vehicle'];
+    if (rawVehicle is String) {
+      try {
+        rawVehicle = jsonDecode(rawVehicle);
+      } catch (_) {}
+    }
     final vehicleMap = rawVehicle != null && rawVehicle is Map
         ? Map<String, dynamic>.from(rawVehicle)
-        : null;
+        : (rawVehicle is List && rawVehicle.isNotEmpty && rawVehicle.first is Map
+            ? Map<String, dynamic>.from(rawVehicle.first)
+            : null);
 
     return DriverModel(
       id: (json['id'] as num?)?.toInt() ?? 1,

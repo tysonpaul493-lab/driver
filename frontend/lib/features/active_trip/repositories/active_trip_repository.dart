@@ -14,7 +14,9 @@ class ActiveTripRepository {
   Future<TripModel?> getActiveTrip() async {
     try {
       final response = await _dioClient.get(ApiConstants.activeTrip);
-      if (response == null || response['trip'] == null || response['trip'] is! Map) {
+      if (response == null ||
+          response['trip'] == null ||
+          response['trip'] is! Map) {
         await _storageService.setActiveBookingId(null);
         return null;
       }
@@ -39,7 +41,10 @@ class ActiveTripRepository {
     double? longitude,
     String? handoverNotes,
   }) async {
-    final endpoint = ApiConstants.updateTripStatus.replaceAll('{id}', tripId.toString());
+    final endpoint = ApiConstants.updateTripStatus.replaceAll(
+      '{id}',
+      tripId.toString(),
+    );
 
     try {
       final response = await _dioClient.patch(
@@ -54,7 +59,9 @@ class ActiveTripRepository {
       );
 
       final rawTrip = response is Map ? (response['trip'] ?? response) : null;
-      final tripMap = rawTrip is Map ? Map<String, dynamic>.from(rawTrip) : <String, dynamic>{};
+      final tripMap = rawTrip is Map
+          ? Map<String, dynamic>.from(rawTrip)
+          : <String, dynamic>{};
       final updated = TripModel.fromJson(tripMap);
       if (newStatus.isFinished) {
         await _storageService.setActiveBookingId(null);
@@ -80,14 +87,14 @@ class ActiveTripRepository {
   }
 
   /// Send a chat reply from the ambulance driver to the requester
-  Future<Map<String, dynamic>?> sendChatMessage(int tripId, String message) async {
+  Future<Map<String, dynamic>?> sendChatMessage(
+    int tripId,
+    String message,
+  ) async {
     try {
       final response = await _dioClient.post(
         '/bookings/$tripId/chat',
-        data: {
-          'sender': 'driver',
-          'message': message.trim(),
-        },
+        data: {'sender': 'driver', 'message': message.trim()},
       );
       if (response is Map && response['entry'] is Map) {
         return Map<String, dynamic>.from(response['entry']);

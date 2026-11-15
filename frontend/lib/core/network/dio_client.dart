@@ -28,7 +28,7 @@ class DioClient {
         responseType: ResponseType.json,
         headers: const {
           'Accept': 'application/json',
-          'Connection': 'close',
+          'Content-Type': 'application/json',
         },
       ),
     );

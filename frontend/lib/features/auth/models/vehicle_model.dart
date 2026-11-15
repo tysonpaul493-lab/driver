@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Vehicle types and equipment specifications for ambulances
 enum VehicleType {
   bls('Basic Life Support (BLS)'),
@@ -54,9 +56,25 @@ class VehicleModel {
   });
 
   factory VehicleModel.fromJson(dynamic raw) {
-    final json = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    dynamic source = raw;
+    if (source is String) {
+      try {
+        source = jsonDecode(source);
+      } catch (_) {}
+    }
+    final json = source is Map
+        ? Map<String, dynamic>.from(source)
+        : (source is List && source.isNotEmpty && source.first is Map
+            ? Map<String, dynamic>.from(source.first)
+            : <String, dynamic>{});
+
     List<String> parsedEquipment = const [];
-    final rawEq = json['equipment_list'];
+    var rawEq = json['equipment_list'];
+    if (rawEq is String && rawEq.trim().startsWith('[')) {
+      try {
+        rawEq = jsonDecode(rawEq);
+      } catch (_) {}
+    }
     if (rawEq is List) {
       parsedEquipment = rawEq.map((e) => e.toString()).toList();
     } else if (rawEq is String && rawEq.trim().isNotEmpty) {

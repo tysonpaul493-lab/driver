@@ -245,10 +245,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } catch (e) {
+      final text = e.toString();
+      final userMsg = text.contains('minified') || text.contains('subtype')
+          ? 'Invalid mobile number or password. Please verify and try again.'
+          : 'Login failed: $e';
       state = state.copyWith(
         isSubmitting: false,
         status: AuthStatus.error,
-        errorMessage: 'Login failed: $e',
+        errorMessage: userMsg,
       );
       return false;
     }

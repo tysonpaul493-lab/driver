@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/date_utils.dart';
@@ -20,7 +21,11 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
     for (final raw in localRaw) {
       try {
         final item = TripHistoryItem.fromJson(raw);
-        if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
+        if (!items.any(
+          (x) =>
+              x.bookingReference == item.bookingReference ||
+              (x.id != 0 && x.id == item.id),
+        )) {
           items.add(item);
         }
       } catch (_) {}
@@ -30,12 +35,18 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
   // 2. Fetch remote records from Laravel backend if online
   try {
     final response = await dio.get(ApiConstants.tripHistory);
-    final list = response is Map && response['trips'] is List ? response['trips'] as List : [];
+    final list = response is Map && response['trips'] is List
+        ? response['trips'] as List
+        : [];
     for (final e in list) {
       try {
         if (e is Map) {
           final item = TripHistoryItem.fromJson(Map<String, dynamic>.from(e));
-          if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
+          if (!items.any(
+            (x) =>
+                x.bookingReference == item.bookingReference ||
+                (x.id != 0 && x.id == item.id),
+          )) {
             items.add(item);
           }
         }
@@ -47,7 +58,9 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
   final seen = <String>{};
   final deduped = <TripHistoryItem>[];
   for (final item in items) {
-    final key = item.bookingReference.isNotEmpty ? item.bookingReference : item.id.toString();
+    final key = item.bookingReference.isNotEmpty
+        ? item.bookingReference
+        : item.id.toString();
     if (seen.add(key)) {
       deduped.add(item);
     }
@@ -73,7 +86,11 @@ class TripHistoryScreen extends ConsumerWidget {
     }
   }
 
-  void _showCompleteStatusModal(BuildContext context, WidgetRef ref, TripHistoryItem trip) {
+  void _showCompleteStatusModal(
+    BuildContext context,
+    WidgetRef ref,
+    TripHistoryItem trip,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -87,7 +104,9 @@ class TripHistoryScreen extends ConsumerWidget {
             decoration: const BoxDecoration(
               color: AppColors.surfaceDark,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border(top: BorderSide(color: AppColors.ambulanceTeal, width: 2)),
+              border: Border(
+                top: BorderSide(color: AppColors.ambulanceTeal, width: 2),
+              ),
             ),
             child: Column(
               children: [
@@ -106,7 +125,10 @@ class TripHistoryScreen extends ConsumerWidget {
 
                 // Modal Header
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -115,10 +137,16 @@ class TripHistoryScreen extends ConsumerWidget {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppColors.statusGreen.withValues(alpha: 0.15),
+                              color: AppColors.statusGreen.withValues(
+                                alpha: 0.15,
+                              ),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.check_circle_rounded, color: AppColors.statusGreen, size: 22),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppColors.statusGreen,
+                              size: 22,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Column(
@@ -153,7 +181,10 @@ class TripHistoryScreen extends ConsumerWidget {
                 // Scrollable Details
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 8,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -182,13 +213,19 @@ class TripHistoryScreen extends ConsumerWidget {
                                 children: [
                                   CircleAvatar(
                                     radius: 18,
-                                    backgroundColor: AppColors.ambulanceTeal.withValues(alpha: 0.15),
-                                    child: const Icon(Icons.person, color: AppColors.ambulanceTeal, size: 20),
+                                    backgroundColor: AppColors.ambulanceTeal
+                                        .withValues(alpha: 0.15),
+                                    child: const Icon(
+                                      Icons.person,
+                                      color: AppColors.ambulanceTeal,
+                                      size: 20,
+                                    ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           trip.patientName,
@@ -199,16 +236,26 @@ class TripHistoryScreen extends ConsumerWidget {
                                           ),
                                         ),
                                         Text(
-                                          trip.patientPhone ?? 'Contact not recorded',
-                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                                          trip.patientPhone ??
+                                              'Contact not recorded',
+                                          style: const TextStyle(
+                                            color: AppColors.textSecondary,
+                                            fontSize: 12.5,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   if (trip.patientPhone != null)
                                     IconButton(
-                                      icon: const Icon(Icons.call, color: AppColors.statusGreen),
-                                      onPressed: () => _makePhoneCall(context, trip.patientPhone),
+                                      icon: const Icon(
+                                        Icons.call,
+                                        color: AppColors.statusGreen,
+                                      ),
+                                      onPressed: () => _makePhoneCall(
+                                        context,
+                                        trip.patientPhone,
+                                      ),
                                     ),
                                 ],
                               ),
@@ -242,21 +289,43 @@ class TripHistoryScreen extends ConsumerWidget {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Icon(Icons.radio_button_checked, color: AppColors.emergencyRed, size: 18),
+                                  const Icon(
+                                    Icons.radio_button_checked,
+                                    color: AppColors.emergencyRed,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Pickup Location', style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                        Text(trip.pickupAddress, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5)),
+                                        const Text(
+                                          'Pickup Location',
+                                          style: TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          trip.pickupAddress,
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
                               Padding(
-                                padding: const EdgeInsets.only(left: 8.0, top: 4, bottom: 4),
+                                padding: const EdgeInsets.only(
+                                  left: 8.0,
+                                  top: 4,
+                                  bottom: 4,
+                                ),
                                 child: Container(
                                   width: 2,
                                   height: 20,
@@ -266,14 +335,32 @@ class TripHistoryScreen extends ConsumerWidget {
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Icon(Icons.local_hospital_rounded, color: AppColors.statusGreen, size: 18),
+                                  const Icon(
+                                    Icons.local_hospital_rounded,
+                                    color: AppColors.statusGreen,
+                                    size: 18,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Destination Hospital', style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold)),
-                                        Text(trip.destinationHospital, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5)),
+                                        const Text(
+                                          'Destination Hospital',
+                                          style: TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          trip.destinationHospital,
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontSize: 13.5,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -294,14 +381,30 @@ class TripHistoryScreen extends ConsumerWidget {
                                 decoration: BoxDecoration(
                                   color: AppColors.cardDark,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.borderDark),
+                                  border: Border.all(
+                                    color: AppColors.borderDark,
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('TOTAL DISTANCE', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const Text(
+                                      'TOTAL DISTANCE',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                    Text('${trip.distanceKm} km', style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+                                    Text(
+                                      '${trip.distanceKm} km',
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -313,14 +416,30 @@ class TripHistoryScreen extends ConsumerWidget {
                                 decoration: BoxDecoration(
                                   color: AppColors.cardDark,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.borderDark),
+                                  border: Border.all(
+                                    color: AppColors.borderDark,
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('TRIP DURATION', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const Text(
+                                      'TRIP DURATION',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                    Text('${trip.durationMinutes} mins', style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+                                    Text(
+                                      '${trip.durationMinutes} mins',
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -332,16 +451,29 @@ class TripHistoryScreen extends ConsumerWidget {
                                 decoration: BoxDecoration(
                                   color: AppColors.cardDark,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.borderDark),
+                                  border: Border.all(
+                                    color: AppColors.borderDark,
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('AMBULANCE', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    const Text(
+                                      'AMBULANCE',
+                                      style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       trip.ambulancePlate ?? 'ALS Unit',
-                                      style: const TextStyle(color: AppColors.ambulanceTeal, fontSize: 14, fontWeight: FontWeight.w800),
+                                      style: const TextStyle(
+                                        color: AppColors.ambulanceTeal,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -355,21 +487,30 @@ class TripHistoryScreen extends ConsumerWidget {
                         const SizedBox(height: 14),
 
                         // Handover Notes Card
-                        if (trip.handoverNotes != null && trip.handoverNotes!.isNotEmpty) ...[
+                        if (trip.handoverNotes != null &&
+                            trip.handoverNotes!.isNotEmpty) ...[
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: const Color(0x1800E5FF),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.ambulanceTeal.withValues(alpha: 0.3)),
+                              border: Border.all(
+                                color: AppColors.ambulanceTeal.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: const [
-                                    Icon(Icons.notes_rounded, color: AppColors.ambulanceTeal, size: 18),
+                                    Icon(
+                                      Icons.notes_rounded,
+                                      color: AppColors.ambulanceTeal,
+                                      size: 18,
+                                    ),
                                     SizedBox(width: 6),
                                     Text(
                                       'CLINICAL HANDOVER NOTES',
@@ -385,7 +526,11 @@ class TripHistoryScreen extends ConsumerWidget {
                                 const SizedBox(height: 6),
                                 Text(
                                   trip.handoverNotes!,
-                                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.4),
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
                                 ),
                               ],
                             ),
@@ -398,10 +543,14 @@ class TripHistoryScreen extends ConsumerWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: trip.isPaid ? const Color(0x1806D6A0) : const Color(0x18FFB703),
+                            color: trip.isPaid
+                                ? const Color(0x1806D6A0)
+                                : const Color(0x18FFB703),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: trip.isPaid ? AppColors.statusGreen : AppColors.alertOrange,
+                              color: trip.isPaid
+                                  ? AppColors.statusGreen
+                                  : AppColors.alertOrange,
                               width: 1.5,
                             ),
                           ),
@@ -409,20 +558,29 @@ class TripHistoryScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
                                       Icon(
-                                        trip.isPaid ? Icons.paid_rounded : Icons.pending_actions_rounded,
-                                        color: trip.isPaid ? AppColors.statusGreen : AppColors.alertOrange,
+                                        trip.isPaid
+                                            ? Icons.paid_rounded
+                                            : Icons.pending_actions_rounded,
+                                        color: trip.isPaid
+                                            ? AppColors.statusGreen
+                                            : AppColors.alertOrange,
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        trip.isPaid ? 'PAYMENT COMPLETED' : 'PAYMENT PENDING / UNPAID',
+                                        trip.isPaid
+                                            ? 'PAYMENT COMPLETED'
+                                            : 'PAYMENT PENDING / UNPAID',
                                         style: TextStyle(
-                                          color: trip.isPaid ? AppColors.statusGreen : AppColors.alertOrange,
+                                          color: trip.isPaid
+                                              ? AppColors.statusGreen
+                                              : AppColors.alertOrange,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -445,7 +603,11 @@ class TripHistoryScreen extends ConsumerWidget {
                                 trip.isPaid
                                     ? 'Payment Method: ${trip.paymentMethod ?? "Digital / Cash"}'
                                     : 'User has not completed payment for this emergency dispatch. The rupee earnings will appear in the trip bar once paid.',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.35),
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
                               ),
 
                               if (!trip.isPaid) ...[
@@ -457,29 +619,42 @@ class TripHistoryScreen extends ConsumerWidget {
                                       final updated = trip.copyWith(
                                         isPaid: true,
                                         paymentStatus: 'Paid',
-                                        paymentMethod: 'Cash / Collected by Pilot',
+                                        paymentMethod:
+                                            'Cash / Collected by Pilot',
                                       );
-                                      final storage = ref.read(storageServiceProvider);
-                                      await storage.updateCompletedTrip(updated.toJson());
+                                      final storage = ref.read(
+                                        storageServiceProvider,
+                                      );
+                                      await storage.updateCompletedTrip(
+                                        updated.toJson(),
+                                      );
                                       ref.invalidate(tripHistoryProvider);
 
                                       if (ctx.mounted) {
                                         Navigator.pop(ctx);
                                       }
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
-                                            backgroundColor: AppColors.surfaceDark,
+                                            backgroundColor:
+                                                AppColors.surfaceDark,
                                             content: Row(
                                               children: [
-                                                const Icon(Icons.check_circle_rounded, color: AppColors.statusGreen),
+                                                const Icon(
+                                                  Icons.check_circle_rounded,
+                                                  color: AppColors.statusGreen,
+                                                ),
                                                 const SizedBox(width: 8),
                                                 Expanded(
                                                   child: Text(
                                                     'Payment recorded! ₹${updated.earnings.toStringAsFixed(0)} is now visible in the trip bar.',
                                                     style: const TextStyle(
-                                                      color: AppColors.textPrimary,
-                                                      fontWeight: FontWeight.w600,
+                                                      color:
+                                                          AppColors.textPrimary,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
@@ -494,11 +669,23 @@ class TripHistoryScreen extends ConsumerWidget {
                                       foregroundColor: Colors.white,
                                       enableFeedback: true,
                                       splashFactory: InkRipple.splashFactory,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      padding: const EdgeInsets.symmetric(vertical: 13),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 13,
+                                      ),
                                     ),
-                                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                                    label: Text('Mark as Paid (Collect ₹${trip.earnings.toStringAsFixed(0)})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    icon: const Icon(
+                                      Icons.check_circle_outline,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      'Mark as Paid (Collect ₹${trip.earnings.toStringAsFixed(0)})',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -612,7 +799,10 @@ class TripHistoryScreen extends ConsumerWidget {
           child: CircularProgressIndicator(color: AppColors.ambulanceTeal),
         ),
         error: (err, _) => Center(
-          child: Text('Error: $err', style: const TextStyle(color: AppColors.emergencyRed)),
+          child: Text(
+            'Error: $err',
+            style: const TextStyle(color: AppColors.emergencyRed),
+          ),
         ),
         data: (trips) {
           if (trips.isEmpty) {
@@ -620,9 +810,16 @@ class TripHistoryScreen extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
-                  Icon(Icons.history_toggle_off_rounded, size: 54, color: AppColors.textMuted),
+                  Icon(
+                    Icons.history_toggle_off_rounded,
+                    size: 54,
+                    color: AppColors.textMuted,
+                  ),
                   SizedBox(height: 12),
-                  Text('No completed trips recorded yet.', style: TextStyle(color: AppColors.textSecondary)),
+                  Text(
+                    'No completed trips recorded yet.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
                 ],
               ),
             );
@@ -630,8 +827,14 @@ class TripHistoryScreen extends ConsumerWidget {
 
           // Earnings only sum trips where user has actually paid!
           final paidTrips = trips.where((t) => t.isPaid).toList();
-          final totalEarnings = paidTrips.fold<double>(0.0, (acc, item) => acc + item.earnings);
-          final totalDistance = trips.fold<double>(0.0, (acc, item) => acc + item.distanceKm);
+          final totalEarnings = paidTrips.fold<double>(
+            0.0,
+            (acc, item) => acc + item.earnings,
+          );
+          final totalDistance = trips.fold<double>(
+            0.0,
+            (acc, item) => acc + item.distanceKm,
+          );
           final unpaidCount = trips.length - paidTrips.length;
 
           return Column(
@@ -650,7 +853,10 @@ class TripHistoryScreen extends ConsumerWidget {
                   children: [
                     _buildStatItem('TOTAL DISPATCHES', '${trips.length}'),
                     Container(height: 30, width: 1, color: AppColors.divider),
-                    _buildStatItem('TOTAL DISTANCE', '${totalDistance.toStringAsFixed(1)} km'),
+                    _buildStatItem(
+                      'TOTAL DISTANCE',
+                      '${totalDistance.toStringAsFixed(1)} km',
+                    ),
                     Container(height: 30, width: 1, color: AppColors.divider),
                     _buildStatItem(
                       'TOTAL COLLECTED',
@@ -674,26 +880,38 @@ class TripHistoryScreen extends ConsumerWidget {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                         side: BorderSide(
-                          color: trip.isPaid ? AppColors.borderDark : AppColors.alertOrange.withValues(alpha: 0.5),
+                          color: trip.isPaid
+                              ? AppColors.borderDark
+                              : AppColors.alertOrange.withValues(alpha: 0.5),
                         ),
                       ),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
                         enableFeedback: true,
-                        splashColor: AppColors.ambulanceTeal.withValues(alpha: 0.15),
-                        highlightColor: AppColors.ambulanceTeal.withValues(alpha: 0.08),
-                        onTap: () => _showCompleteStatusModal(context, ref, trip),
+                        splashColor: AppColors.ambulanceTeal.withValues(
+                          alpha: 0.15,
+                        ),
+                        highlightColor: AppColors.ambulanceTeal.withValues(
+                          alpha: 0.08,
+                        ),
+                        onTap: () =>
+                            _showCompleteStatusModal(context, ref, trip),
                         child: Padding(
                           padding: const EdgeInsets.all(14),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.check_circle_rounded, color: AppColors.statusGreen, size: 18),
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        color: AppColors.statusGreen,
+                                        size: 18,
+                                      ),
                                       const SizedBox(width: 6),
                                       Text(
                                         trip.bookingReference,
@@ -708,13 +926,30 @@ class TripHistoryScreen extends ConsumerWidget {
                                   StatusBadge.triage(trip.emergencyCategory),
                                 ],
                               ),
-                              const Divider(height: 18, color: AppColors.divider),
-                              _buildRouteRow(Icons.radio_button_checked, AppColors.emergencyRed, 'Pickup', trip.pickupAddress),
+                              const Divider(
+                                height: 18,
+                                color: AppColors.divider,
+                              ),
+                              _buildRouteRow(
+                                Icons.radio_button_checked,
+                                AppColors.emergencyRed,
+                                'Pickup',
+                                trip.pickupAddress,
+                              ),
                               const SizedBox(height: 6),
-                              _buildRouteRow(Icons.location_on, AppColors.statusGreen, 'Hospital', trip.destinationHospital),
-                              const Divider(height: 18, color: AppColors.divider),
+                              _buildRouteRow(
+                                Icons.location_on,
+                                AppColors.statusGreen,
+                                'Hospital',
+                                trip.destinationHospital,
+                              ),
+                              const Divider(
+                                height: 18,
+                                color: AppColors.divider,
+                              ),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     '${AppDateUtils.formatDateTime(trip.completedAt)} • ${trip.durationMinutes}m full trip',
@@ -723,16 +958,28 @@ class TripHistoryScreen extends ConsumerWidget {
                                   // RUPEES BAR: Only show rupees when user paid; if unpaid, remove rupees from bar!
                                   if (trip.isPaid)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: AppColors.statusGreen.withValues(alpha: 0.15),
+                                        color: AppColors.statusGreen.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: AppColors.statusGreen.withValues(alpha: 0.4)),
+                                        border: Border.all(
+                                          color: AppColors.statusGreen
+                                              .withValues(alpha: 0.4),
+                                        ),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.check, color: AppColors.statusGreen, size: 13),
+                                          const Icon(
+                                            Icons.check,
+                                            color: AppColors.statusGreen,
+                                            size: 13,
+                                          ),
                                           const SizedBox(width: 3),
                                           Text(
                                             '₹${trip.earnings.toStringAsFixed(0)}',
@@ -747,16 +994,28 @@ class TripHistoryScreen extends ConsumerWidget {
                                     )
                                   else
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: AppColors.alertOrange.withValues(alpha: 0.15),
+                                        color: AppColors.alertOrange.withValues(
+                                          alpha: 0.15,
+                                        ),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: AppColors.alertOrange.withValues(alpha: 0.4)),
+                                        border: Border.all(
+                                          color: AppColors.alertOrange
+                                              .withValues(alpha: 0.4),
+                                        ),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: const [
-                                          Icon(Icons.pending_outlined, color: AppColors.alertOrange, size: 13),
+                                          Icon(
+                                            Icons.pending_outlined,
+                                            color: AppColors.alertOrange,
+                                            size: 13,
+                                          ),
                                           SizedBox(width: 4),
                                           Text(
                                             'Unpaid',
@@ -773,20 +1032,34 @@ class TripHistoryScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    AppDateUtils.formatDateTime(trip.completedAt),
-                                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                    AppDateUtils.formatDateTime(
+                                      trip.completedAt,
+                                    ),
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                   Row(
                                     children: const [
                                       Text(
                                         'View Complete Status',
-                                        style: TextStyle(color: AppColors.ambulanceTeal, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          color: AppColors.ambulanceTeal,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       SizedBox(width: 2),
-                                      Icon(Icons.chevron_right_rounded, color: AppColors.ambulanceTeal, size: 16),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.ambulanceTeal,
+                                        size: 16,
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -809,12 +1082,35 @@ class TripHistoryScreen extends ConsumerWidget {
   Widget _buildStatItem(String label, String value, {String? subText}) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.2)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
         const SizedBox(height: 3),
-        Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.3,
+          ),
+        ),
         if (subText != null) ...[
           const SizedBox(height: 2),
-          Text(subText, style: const TextStyle(color: AppColors.alertOrange, fontSize: 9.5, fontWeight: FontWeight.w700)),
+          Text(
+            subText,
+            style: const TextStyle(
+              color: AppColors.alertOrange,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ],
     );
@@ -833,8 +1129,22 @@ class TripHistoryScreen extends ConsumerWidget {
               text: TextSpan(
                 style: const TextStyle(height: 1.35),
                 children: [
-                  TextSpan(text: '$type: ', style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.bold)),
-                  TextSpan(text: text, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500)),
+                  TextSpan(
+                    text: '$type: ',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextSpan(
+                    text: text,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ),
