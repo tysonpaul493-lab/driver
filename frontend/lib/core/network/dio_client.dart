@@ -49,7 +49,12 @@ class DioClient {
   Future<void> initFromStorage() async {
     final customUrl = await _storageService.getCustomApiUrl();
     if (customUrl != null && customUrl.isNotEmpty) {
-      ApiConstants.setServerHost(customUrl);
+      if (kIsWeb && (customUrl.contains('localhost') || customUrl.contains('127.0.0.1'))) {
+        await _storageService.setCustomApiUrl(null);
+        ApiConstants.setServerHost(null);
+      } else {
+        ApiConstants.setServerHost(customUrl);
+      }
     }
     refreshBaseUrl();
   }

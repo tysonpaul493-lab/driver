@@ -37,13 +37,26 @@ class ApiConstants {
   static String? _runtimeFallbackHost;
 
   /// Effective server IP/hostname for both REST API and live WebSocket dispatch
-  static String get effectiveHost =>
-      _customServerHost ?? _runtimeFallbackHost ?? _detectedHost;
-  static bool get hasCustomServerHost => _customServerHost != null;
+  static String get effectiveHost {
+    if (kIsWeb) {
+      if (_customServerHost != null &&
+          _customServerHost!.isNotEmpty &&
+          !_customServerHost!.contains('localhost') &&
+          !_customServerHost!.contains('127.0.0.1')) {
+        return _customServerHost!;
+      }
+      return _kDefaultLiveWebBackend;
+    }
+    return _customServerHost ?? _runtimeFallbackHost ?? _detectedHost;
+  }
+
+  static bool get hasCustomServerHost =>
+      _customServerHost != null &&
+      (!kIsWeb || (!_customServerHost!.contains('localhost') && !_customServerHost!.contains('127.0.0.1')));
 
   /// User-friendly label of the current server endpoint for notifications and error messages
   static String get displayServerEndpoint {
-    if (kIsWeb && !hasCustomServerHost && configuredApiUrl.isEmpty) {
+    if (kIsWeb) {
       return 'Cloudflare Dispatch Gateway';
     }
     if (effectiveHost.startsWith('http://') || effectiveHost.startsWith('https://')) {
@@ -56,14 +69,7 @@ class ApiConstants {
   static List<String> get candidateHosts {
     if (kIsWeb) {
       return [
-        if (_customServerHost != null && _customServerHost!.isNotEmpty)
-          _customServerHost!
-        else ...[
-          _kDefaultLiveWebBackend,
-          'localhost',
-          if (fallbackLanHost.isNotEmpty && fallbackLanHost != 'localhost')
-            fallbackLanHost,
-        ],
+        if (hasCustomServerHost) _customServerHost! else _kDefaultLiveWebBackend,
       ];
     }
 
@@ -140,6 +146,23 @@ class ApiConstants {
 
   /// Build base API URL for an explicit host
   static String baseUrlForHost(String host) {
+    if (kIsWeb) {
+      if (_customFullBaseUrl != null &&
+          _customFullBaseUrl!.isNotEmpty &&
+          !_customFullBaseUrl!.contains('localhost') &&
+          !_customFullBaseUrl!.contains('127.0.0.1')) {
+        return _customFullBaseUrl!;
+      }
+      if (host.startsWith('http://') || host.startsWith('https://')) {
+        if (!host.contains('localhost') && !host.contains('127.0.0.1')) {
+          var url = host;
+          if (url.endsWith('/')) url = url.substring(0, url.length - 1);
+          if (!url.endsWith('/api/v1') && !url.endsWith('/api')) url = '$url/api/v1';
+          return url;
+        }
+      }
+      return _kDefaultLiveWebBackend;
+    }
     if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
       return _customFullBaseUrl!;
     }
@@ -159,6 +182,20 @@ class ApiConstants {
   // For USB debugging use 127.0.0.1 with adb reverse
   // For multi-device Wi-Fi LAN use PC LAN IP e.g. 192.168.0.112
   static String get defaultBaseUrl {
+    if (kIsWeb) {
+      if (_customFullBaseUrl != null &&
+          _customFullBaseUrl!.isNotEmpty &&
+          !_customFullBaseUrl!.contains('localhost') &&
+          !_customFullBaseUrl!.contains('127.0.0.1')) {
+        return _customFullBaseUrl!;
+      }
+      if (configuredApiUrl.isNotEmpty &&
+          !configuredApiUrl.contains('localhost') &&
+          !configuredApiUrl.contains('127.0.0.1')) {
+        return configuredApiUrl;
+      }
+      return _kDefaultLiveWebBackend;
+    }
     if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
       return _customFullBaseUrl!;
     }

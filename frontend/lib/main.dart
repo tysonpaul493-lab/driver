@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/api_constants.dart';
@@ -18,8 +19,13 @@ void main() async {
   final storage = SecureStorageService();
   await storage.init();
   final savedServerHost = await storage.getCustomApiUrl();
-  ApiConstants.setServerHost(savedServerHost);
-  if (!ApiConstants.hasCustomServerHost) {
+  if (kIsWeb && savedServerHost != null && (savedServerHost.contains('localhost') || savedServerHost.contains('127.0.0.1'))) {
+    await storage.setCustomApiUrl(null);
+    ApiConstants.setServerHost(null);
+  } else {
+    ApiConstants.setServerHost(savedServerHost);
+  }
+  if (!ApiConstants.hasCustomServerHost && !kIsWeb) {
     try {
       await DioClient.resolveReachableHost().timeout(
         const Duration(milliseconds: 2500),
