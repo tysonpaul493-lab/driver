@@ -153,7 +153,8 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
           _ref.read(activeTripProvider).hasActiveTrip) {
         return;
       }
-      final request = BookingRequestModel.fromJson(data);
+      final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      final request = BookingRequestModel.fromJson(map);
       if (_declinedBookingIds.contains(request.id)) return;
       // Play high priority dispatch alert tone & vibration
       AudioAlertService.playDispatchAlert();

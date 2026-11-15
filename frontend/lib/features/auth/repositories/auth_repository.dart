@@ -174,7 +174,7 @@ class AuthRepository {
         'expiry_date': ?expiryDate,
       },
     );
-    return response as Map<String, dynamic>;
+    return response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
   }
 
   /// Upload compliance documents from raw bytes (Web-safe)
@@ -194,7 +194,7 @@ class AuthRepository {
         'expiry_date': ?expiryDate,
       },
     );
-    return response as Map<String, dynamic>;
+    return response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
   }
 
   /// Update driver and ambulance profile fields on dispatch backend
@@ -223,7 +223,9 @@ class AuthRepository {
         },
       },
     );
-    final driver = DriverModel.fromJson(response['driver'] ?? response);
+    final rawDriver = response is Map ? (response['driver'] ?? response) : null;
+    final driverMap = rawDriver is Map ? Map<String, dynamic>.from(rawDriver) : <String, dynamic>{};
+    final driver = DriverModel.fromJson(driverMap);
     await _storageService.saveDriverProfile(driver.toJson());
     return driver;
   }
@@ -231,7 +233,9 @@ class AuthRepository {
   /// Fetch updated driver profile and vehicle info
   Future<DriverModel> getProfile() async {
     final response = await _dioClient.get(ApiConstants.profile);
-    final driver = DriverModel.fromJson(response['driver'] ?? response);
+    final rawDriver = response is Map ? (response['driver'] ?? response) : null;
+    final driverMap = rawDriver is Map ? Map<String, dynamic>.from(rawDriver) : <String, dynamic>{};
+    final driver = DriverModel.fromJson(driverMap);
     await _storageService.saveDriverProfile(driver.toJson());
     return driver;
   }

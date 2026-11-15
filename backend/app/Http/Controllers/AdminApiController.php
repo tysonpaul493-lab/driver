@@ -564,7 +564,8 @@ class AdminApiController extends Controller
     public function hospitals(): JsonResponse
     {
         $raw = (new HospitalController())->nearby(new Request(['lat' => 11.0318, 'lng' => 76.9437]));
-        $list = $raw->getData(true)['hospitals'] ?? [];
+        $res = $raw->getData(true);
+        $list = $res['data'] ?? $res['hospitals'] ?? [];
 
         $hospitals = array_map(function ($h, $idx) {
             return [

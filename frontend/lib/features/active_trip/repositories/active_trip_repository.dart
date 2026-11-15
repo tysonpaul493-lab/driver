@@ -48,7 +48,9 @@ class ActiveTripRepository {
         },
       );
 
-      final updated = TripModel.fromJson(response['trip'] ?? response);
+      final rawTrip = response is Map ? (response['trip'] ?? response) : null;
+      final tripMap = rawTrip is Map ? Map<String, dynamic>.from(rawTrip) : <String, dynamic>{};
+      final updated = TripModel.fromJson(tripMap);
       if (newStatus.isFinished) {
         await _storageService.setActiveBookingId(null);
       }

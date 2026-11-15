@@ -13,12 +13,15 @@ class AuthResponse {
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
+    final rawDriver = json['driver'];
+    final Map<String, dynamic> driverMap = rawDriver != null && rawDriver is Map
+        ? Map<String, dynamic>.from(rawDriver)
+        : <String, dynamic>{};
+
     return AuthResponse(
-      token: json['token'] as String? ?? json['access_token'] as String? ?? '',
-      tokenType: json['token_type'] as String? ?? 'Bearer',
-      driver: json['driver'] != null && json['driver'] is Map
-          ? DriverModel.fromJson(Map<String, dynamic>.from(json['driver'] as Map))
-          : DriverModel.fromJson({}),
+      token: (json['token'] ?? json['access_token'] ?? '').toString(),
+      tokenType: (json['token_type'] ?? 'Bearer').toString(),
+      driver: DriverModel.fromJson(driverMap),
     );
   }
 }

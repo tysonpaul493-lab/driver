@@ -82,25 +82,28 @@ class DriverModel {
       });
     }
 
+    final rawVehicle = json['assigned_vehicle'];
+    final vehicleMap = rawVehicle != null && rawVehicle is Map
+        ? Map<String, dynamic>.from(rawVehicle)
+        : null;
+
     return DriverModel(
       id: (json['id'] as num?)?.toInt() ?? 1,
-      name: (json['name'] as String?) ?? '',
-      phone: json['phone'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      emergencyContact: json['emergency_contact'] as String? ?? '',
-      licenseNumber: json['license_number'] as String? ?? '',
-      licenseExpiryDate: json['license_expiry_date'] as String? ?? '',
+      name: (json['name'] ?? '').toString(),
+      phone: (json['phone'] ?? '').toString(),
+      email: (json['email'] ?? '').toString(),
+      emergencyContact: (json['emergency_contact'] ?? '').toString(),
+      licenseNumber: (json['license_number'] ?? '').toString(),
+      licenseExpiryDate: (json['license_expiry_date'] ?? '').toString(),
       verificationStatus: VerificationStatus.fromString(
-        json['verification_status'] as String?,
+        json['verification_status']?.toString(),
       ),
-      rejectionReason: json['rejection_reason'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      assignedVehicle: json['assigned_vehicle'] != null && json['assigned_vehicle'] is Map
-          ? VehicleModel.fromJson(
-              Map<String, dynamic>.from(json['assigned_vehicle'] as Map),
-            )
-          : null,
-      isOnline: json['is_online'] == true || json['is_online'] == 1,
+      rejectionReason: json['rejection_reason']?.toString(),
+      avatarUrl: json['avatar_url']?.toString(),
+      assignedVehicle: vehicleMap != null ? VehicleModel.fromJson(vehicleMap) : null,
+      isOnline: json['is_online'] == true ||
+          json['is_online'] == 1 ||
+          json['is_online'] == 'true',
       rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
       completedTripsCount: (json['completed_trips_count'] as num?)?.toInt() ??
           (json['total_trips'] as num?)?.toInt() ??
