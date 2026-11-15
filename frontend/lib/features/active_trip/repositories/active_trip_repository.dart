@@ -14,11 +14,11 @@ class ActiveTripRepository {
   Future<TripModel?> getActiveTrip() async {
     try {
       final response = await _dioClient.get(ApiConstants.activeTrip);
-      if (response == null || response['trip'] == null) {
+      if (response == null || response['trip'] == null || response['trip'] is! Map) {
         await _storageService.setActiveBookingId(null);
         return null;
       }
-      final trip = TripModel.fromJson(response['trip'] as Map<String, dynamic>);
+      final trip = TripModel.fromJson(Map<String, dynamic>.from(response['trip'] as Map));
       await _storageService.setActiveBookingId(trip.bookingReference);
       return trip;
     } catch (_) {

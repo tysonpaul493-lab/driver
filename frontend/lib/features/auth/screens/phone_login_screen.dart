@@ -5,6 +5,7 @@ import '../../../core/utils/phone_utils.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/server_settings_dialog.dart';
 import '../providers/auth_provider.dart';
+import '../../dashboard/screens/driver_dashboard_screen.dart';
 import 'driver_registration_screen.dart';
 
 class PhoneLoginScreen extends ConsumerStatefulWidget {
@@ -60,6 +61,10 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     if (!mounted) return;
     if (success) {
       FocusScope.of(context).unfocus();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const DriverDashboardScreen()),
+        (route) => false,
+      );
     } else {
       final err = ref.read(authNotifierProvider).errorMessage ??
           'Invalid mobile number or password. Please try again.';

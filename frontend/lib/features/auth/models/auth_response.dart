@@ -16,7 +16,9 @@ class AuthResponse {
     return AuthResponse(
       token: json['token'] as String? ?? json['access_token'] as String? ?? '',
       tokenType: json['token_type'] as String? ?? 'Bearer',
-      driver: DriverModel.fromJson(json['driver'] as Map<String, dynamic>? ?? {}),
+      driver: json['driver'] != null && json['driver'] is Map
+          ? DriverModel.fromJson(Map<String, dynamic>.from(json['driver'] as Map))
+          : DriverModel.fromJson({}),
     );
   }
 }

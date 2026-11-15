@@ -19,8 +19,11 @@ class RequestsRepository {
   Future<List<BookingRequestModel>> getPendingRequests() async {
     try {
       final response = await _dioClient.get(ApiConstants.pendingRequests);
-      final list = response['requests'] as List? ?? [];
-      return list.map((e) => BookingRequestModel.fromJson(e as Map<String, dynamic>)).toList();
+      final list = response is Map && response['requests'] is List ? response['requests'] as List : [];
+      return list
+          .whereType<Map>()
+          .map((e) => BookingRequestModel.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -32,8 +35,8 @@ class RequestsRepository {
 
     try {
       final response = await _dioClient.post(endpoint);
-      final tripData = response['trip'] ?? response;
-      return TripModel.fromJson(tripData as Map<String, dynamic>);
+      final tripData = (response is Map ? (response['trip'] ?? response) : null);
+      return TripModel.fromJson(tripData is Map ? Map<String, dynamic>.from(tripData) : <String, dynamic>{});
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
         throw BookingAlreadyClaimedException(

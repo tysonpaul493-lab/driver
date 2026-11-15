@@ -124,7 +124,8 @@ class ReverbService {
         (data) {
           if (!identical(_directChannel, channel)) return;
           try {
-            final parsed = jsonDecode(data.toString()) as Map<String, dynamic>;
+            final decoded = jsonDecode(data.toString());
+            final parsed = decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
             final eventName = parsed['event'] as String? ?? '';
             dynamic eventData = parsed['data'];
             if (eventData is String) {
@@ -132,8 +133,8 @@ class ReverbService {
                 eventData = jsonDecode(eventData);
               } catch (_) {}
             }
-            if (eventData is Map<String, dynamic>) {
-              _routeEvent(eventName, eventData);
+            if (eventData is Map) {
+              _routeEvent(eventName, Map<String, dynamic>.from(eventData));
             } else if (parsed.containsKey('id') || parsed.containsKey('booking_reference')) {
               _routeEvent(eventName, parsed);
             }

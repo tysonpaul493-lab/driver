@@ -23,7 +23,8 @@ class AuthRepository {
         receiveTimeout: const Duration(seconds: 20),
       ),
     );
-    return response as Map<String, dynamic>;
+    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    return map;
   }
 
   /// Check if a phone number is registered on the dispatch server
@@ -32,7 +33,7 @@ class AuthRepository {
       '/driver/auth/check-phone',
       data: {'phone': phone},
     );
-    final data = response as Map<String, dynamic>;
+    final data = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
     return data['is_registered'] == true || data['registered'] == true;
   }
 
@@ -50,7 +51,8 @@ class AuthRepository {
       },
     );
 
-    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final authResponse = AuthResponse.fromJson(map);
     
     // Save token and profile to secure storage
     await _storageService.saveAuthToken(authResponse.token);
@@ -72,7 +74,8 @@ class AuthRepository {
       },
     );
 
-    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final authResponse = AuthResponse.fromJson(map);
     await _storageService.saveAuthToken(authResponse.token);
     await _storageService.saveDriverId(authResponse.driver.id);
     await _storageService.saveDriverProfile(authResponse.driver.toJson());
@@ -92,7 +95,8 @@ class AuthRepository {
       },
     );
 
-    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final authResponse = AuthResponse.fromJson(map);
     await _storageService.saveAuthToken(authResponse.token);
     await _storageService.saveDriverId(authResponse.driver.id);
     await _storageService.saveDriverProfile(authResponse.driver.toJson());
@@ -146,7 +150,8 @@ class AuthRepository {
       },
     );
 
-    final authResponse = AuthResponse.fromJson(response as Map<String, dynamic>);
+    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final authResponse = AuthResponse.fromJson(map);
     // Registration must not set an active login session token: driver must log in with their ID and password
     await _storageService.deleteAuthToken();
     await _storageService.saveRegisteredDriverByPhone(phone, authResponse.driver.toJson());

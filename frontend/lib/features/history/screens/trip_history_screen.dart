@@ -30,12 +30,14 @@ final tripHistoryProvider = FutureProvider<List<TripHistoryItem>>((ref) async {
   // 2. Fetch remote records from Laravel backend if online
   try {
     final response = await dio.get(ApiConstants.tripHistory);
-    final list = response['trips'] as List? ?? [];
+    final list = response is Map && response['trips'] is List ? response['trips'] as List : [];
     for (final e in list) {
       try {
-        final item = TripHistoryItem.fromJson(e as Map<String, dynamic>);
-        if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
-          items.add(item);
+        if (e is Map) {
+          final item = TripHistoryItem.fromJson(Map<String, dynamic>.from(e));
+          if (!items.any((x) => x.bookingReference == item.bookingReference || (x.id != 0 && x.id == item.id))) {
+            items.add(item);
+          }
         }
       } catch (_) {}
     }

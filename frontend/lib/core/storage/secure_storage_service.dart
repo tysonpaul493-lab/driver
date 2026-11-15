@@ -52,7 +52,11 @@ class SecureStorageService {
     final data = _prefs?.getString(StorageKeys.driverProfile);
     if (data == null) return null;
     try {
-      return jsonDecode(data) as Map<String, dynamic>;
+      final decoded = jsonDecode(data);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -135,7 +139,8 @@ class SecureStorageService {
       final data = _prefs?.getString('reg_driver_$clean');
       if (data != null) {
         try {
-          return jsonDecode(data) as Map<String, dynamic>;
+          final decoded = jsonDecode(data);
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
         } catch (_) {}
       }
     }
@@ -143,7 +148,8 @@ class SecureStorageService {
       final data = _prefs?.getString('reg_driver_$rawDigits');
       if (data != null) {
         try {
-          return jsonDecode(data) as Map<String, dynamic>;
+          final decoded = jsonDecode(data);
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
         } catch (_) {}
       }
     }
@@ -151,7 +157,8 @@ class SecureStorageService {
     final lastData = _prefs?.getString('last_reg_driver');
     if (lastData != null) {
       try {
-        return jsonDecode(lastData) as Map<String, dynamic>;
+        final decoded = jsonDecode(lastData);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
       } catch (_) {}
     }
     // Fallback to currently cached driver profile
@@ -256,7 +263,11 @@ class SecureStorageService {
     final data = _prefs?.getString('last_accepted_driver_dispatch');
     if (data == null) return null;
     try {
-      return jsonDecode(data) as Map<String, dynamic>;
+      final decoded = jsonDecode(data);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return null;
     } catch (_) {
       return null;
     }

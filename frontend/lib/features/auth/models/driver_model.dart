@@ -75,8 +75,15 @@ class DriverModel {
       verificationStatus.isApproved && (assignedVehicle?.isEligible ?? false);
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
+    final Map<String, bool> docs = {};
+    if (json['documents_uploaded'] != null && json['documents_uploaded'] is Map) {
+      (json['documents_uploaded'] as Map).forEach((k, v) {
+        docs[k.toString()] = v == true || v == 1 || v.toString() == 'true';
+      });
+    }
+
     return DriverModel(
-      id: json['id'] as int? ?? 1,
+      id: (json['id'] as num?)?.toInt() ?? 1,
       name: (json['name'] as String?) ?? '',
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String? ?? '',
@@ -88,17 +95,17 @@ class DriverModel {
       ),
       rejectionReason: json['rejection_reason'] as String?,
       avatarUrl: json['avatar_url'] as String?,
-      assignedVehicle: json['assigned_vehicle'] != null
+      assignedVehicle: json['assigned_vehicle'] != null && json['assigned_vehicle'] is Map
           ? VehicleModel.fromJson(
-              json['assigned_vehicle'] as Map<String, dynamic>,
+              Map<String, dynamic>.from(json['assigned_vehicle'] as Map),
             )
           : null,
-      isOnline: json['is_online'] as bool? ?? false,
+      isOnline: json['is_online'] == true || json['is_online'] == 1,
       rating: (json['rating'] as num?)?.toDouble() ?? 4.9,
-      completedTripsCount: json['completed_trips_count'] as int? ?? 0,
-      documentsUploaded: json['documents_uploaded'] != null
-          ? Map<String, bool>.from(json['documents_uploaded'] as Map)
-          : <String, bool>{},
+      completedTripsCount: (json['completed_trips_count'] as num?)?.toInt() ??
+          (json['total_trips'] as num?)?.toInt() ??
+          0,
+      documentsUploaded: docs,
     );
   }
 

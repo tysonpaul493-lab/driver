@@ -29,7 +29,9 @@ class DashboardRepository {
 
     try {
       final response = await _dioClient.get(ApiConstants.dashboardSummary);
-      final model = DashboardSummaryModel.fromJson(response as Map<String, dynamic>);
+      final model = DashboardSummaryModel.fromJson(
+        response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{},
+      );
       return model.copyWith(
         completedTripsToday: model.completedTripsToday + localCount,
         distanceCoveredKm: model.distanceCoveredKm + localDistance,

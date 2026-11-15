@@ -59,9 +59,9 @@ class VehicleModel {
       registrationNumber: json['registration_number'] as String? ?? '',
       vehicleType: VehicleType.fromString(json['vehicle_type'] as String?),
       makeModel: json['make_model'] as String? ?? '',
-      year: json['year'] as int? ?? 2024,
-      equipmentList: json['equipment_list'] != null
-          ? List<String>.from(json['equipment_list'] as List)
+      year: (json['year'] as num?)?.toInt() ?? 2024,
+      equipmentList: json['equipment_list'] != null && json['equipment_list'] is List
+          ? (json['equipment_list'] as List).map((e) => e.toString()).toList()
           : const <String>[],
       operatorAffiliation: json['operator_affiliation'] as String? ?? '',
       permitNumber: json['permit_number'] as String? ?? '',
