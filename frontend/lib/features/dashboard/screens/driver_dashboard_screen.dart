@@ -35,6 +35,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
   final MapController _mapController = MapController();
   bool _isRequestSheetOpen = false;
   bool _hasCenteredMapOnGps = false;
+  double _mapRotation = 0.0;
 
   @override
   void initState() {
@@ -868,30 +869,37 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                       borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(15),
                       ),
-                      child: SizedBox(
-                        height: 520,
-                        width: double.infinity,
-                        child: Stack(
-                          children: [
-                            // Rich cartographic base canvas
-                            const Positioned.fill(
-                              child: CartographicMapBackground(),
-                            ),
-
-                            FlutterMap(
-                              mapController: _mapController,
-                              options: MapOptions(
-                                initialCenter: ll.LatLng(
-                                  locationState.latitude ?? 12.9716,
-                                  locationState.longitude ?? 77.5946,
-                                ),
-                                initialZoom: 15.5,
-                                interactionOptions: const InteractionOptions(
-                                  flags:
-                                      InteractiveFlag.pinchZoom |
-                                      InteractiveFlag.drag,
-                                ),
+                      child: RepaintBoundary(
+                        child: SizedBox(
+                          height: 520,
+                          width: double.infinity,
+                          child: Stack(
+                            children: [
+                              // Rich cartographic base canvas
+                              const Positioned.fill(
+                                child: CartographicMapBackground(),
                               ),
+
+                              FlutterMap(
+                                mapController: _mapController,
+                                options: MapOptions(
+                                  initialCenter: ll.LatLng(
+                                    locationState.latitude ?? 12.9716,
+                                    locationState.longitude ?? 77.5946,
+                                  ),
+                                  initialZoom: 15.5,
+                                  initialRotation: _mapRotation,
+                                  interactionOptions: const InteractionOptions(
+                                    flags: InteractiveFlag.all,
+                                    rotationThreshold: 15.0,
+                                    enableMultiFingerGestureRace: true,
+                                  ),
+                                  onPositionChanged: (camera, hasGesture) {
+                                    if ((_mapRotation - camera.rotation).abs() > 0.5) {
+                                      setState(() => _mapRotation = camera.rotation);
+                                    }
+                                  },
+                                ),
                               children: [
                                 TileLayer(
                                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -1025,12 +1033,45 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                                 ),
                               ),
                             ),
-                            // Map Zoom & Recenter Controls Overlay
+                            // Map Zoom & Recenter & Compass Controls Overlay
                             Positioned(
                               top: 12,
                               right: 12,
                               child: Column(
                                 children: [
+                                  // Compass / Reset North Button
+                                  Material(
+                                    color: AppColors.surfaceDark.withValues(
+                                      alpha: 0.9,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: const BorderSide(
+                                        color: AppColors.borderDark,
+                                      ),
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () {
+                                        try {
+                                          _mapController.rotate(0.0);
+                                          setState(() => _mapRotation = 0.0);
+                                        } catch (_) {}
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Transform.rotate(
+                                          angle: -(_mapRotation * math.pi / 180.0),
+                                          child: const Icon(
+                                            Icons.explore_rounded,
+                                            color: AppColors.ambulanceTeal,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
                                   Material(
                                     color: AppColors.surfaceDark.withValues(
                                       alpha: 0.9,
@@ -1168,6 +1209,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                         ),
                       ),
                     ),
+                  ),
                   ],
                 ),
               ),

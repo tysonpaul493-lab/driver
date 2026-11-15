@@ -76,10 +76,15 @@ class DriverModel {
 
   factory DriverModel.fromJson(Map<String, dynamic> json) {
     final Map<String, bool> docs = {};
-    if (json['documents_uploaded'] != null && json['documents_uploaded'] is Map) {
-      (json['documents_uploaded'] as Map).forEach((k, v) {
+    final rawDocs = json['documents_uploaded'];
+    if (rawDocs is Map) {
+      rawDocs.forEach((k, v) {
         docs[k.toString()] = v == true || v == 1 || v.toString() == 'true';
       });
+    } else if (rawDocs is List) {
+      for (final item in rawDocs) {
+        if (item != null) docs[item.toString()] = true;
+      }
     }
 
     final rawVehicle = json['assigned_vehicle'];

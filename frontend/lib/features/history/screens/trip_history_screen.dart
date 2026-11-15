@@ -508,11 +508,75 @@ class TripHistoryScreen extends ConsumerWidget {
 
                         const SizedBox(height: 14),
 
-                        // Timestamp
-                        Center(
-                          child: Text(
-                            'Dispatch Completed: ${AppDateUtils.formatDateTime(trip.completedAt)}',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        // Real-Time Trip Timeline & Handover Duration
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.borderDark),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'TRIP TIMELINE & DURATION',
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Trip Start', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        AppDateUtils.formatTime(trip.startedAt),
+                                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const Icon(Icons.arrow_forward_rounded, color: AppColors.ambulanceTeal, size: 16),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      const Text('Duration', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${trip.durationMinutes} mins',
+                                        style: const TextStyle(color: AppColors.ambulanceTeal, fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const Icon(Icons.arrow_forward_rounded, color: AppColors.statusGreen, size: 16),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      const Text('Completed', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        AppDateUtils.formatTime(trip.completedAt),
+                                        style: const TextStyle(color: AppColors.statusGreen, fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Center(
+                                child: Text(
+                                  AppDateUtils.formatDate(trip.completedAt),
+                                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -653,8 +717,8 @@ class TripHistoryScreen extends ConsumerWidget {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    '${trip.distanceKm} km • ${trip.durationMinutes} mins',
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                    '${AppDateUtils.formatDateTime(trip.completedAt)} • ${trip.durationMinutes}m full trip',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
                                   ),
                                   // RUPEES BAR: Only show rupees when user paid; if unpaid, remove rupees from bar!
                                   if (trip.isPaid)

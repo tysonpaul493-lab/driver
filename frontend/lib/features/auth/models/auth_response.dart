@@ -12,7 +12,8 @@ class AuthResponse {
     required this.driver,
   });
 
-  factory AuthResponse.fromJson(Map<String, dynamic> json) {
+  factory AuthResponse.fromJson(dynamic raw) {
+    final json = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
     final rawDriver = json['driver'];
     final Map<String, dynamic> driverMap = rawDriver != null && rawDriver is Map
         ? Map<String, dynamic>.from(rawDriver)

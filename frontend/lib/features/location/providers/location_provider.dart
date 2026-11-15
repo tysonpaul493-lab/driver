@@ -139,7 +139,7 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
         final address = data is Map && data['address'] is Map
-            ? Map<String, dynamic>.from(data['address'] as Map)
+            ? Map<String, dynamic>.from(data['address'])
             : null;
         if (address != null) {
           final road = address['road'] ?? address['pedestrian'] ?? address['neighbourhood'] ?? address['suburb'] ?? '';

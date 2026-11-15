@@ -333,8 +333,11 @@ class DioClient {
         if (data.containsKey('message')) {
           message = data['message'].toString();
         }
-        if (data.containsKey('errors') && data['errors'] is Map) {
-          validationErrors = Map<String, dynamic>.from(data['errors'] as Map);
+        final rawErrors = data['errors'];
+        if (rawErrors is Map) {
+          validationErrors = Map<String, dynamic>.from(rawErrors);
+        } else if (rawErrors is List && rawErrors.isNotEmpty) {
+          message = rawErrors.map((e) => e.toString()).join('\n');
         }
       }
 

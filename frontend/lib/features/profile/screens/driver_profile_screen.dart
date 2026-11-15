@@ -82,6 +82,34 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
     }
   }
 
+  String _getDocMatchingSpec(String key, DriverModel? driver, VehicleModel? vehicle) {
+    switch (key) {
+      case 'driving_license_front':
+      case 'driving_license_back':
+        return driver?.licenseNumber.isNotEmpty == true
+            ? 'Matched to License: ${driver!.licenseNumber}'
+            : 'License number pending input';
+      case 'vehicle_registration':
+        return vehicle?.registrationNumber.isNotEmpty == true
+            ? 'Matched to RC Plate: ${vehicle!.registrationNumber}'
+            : 'Vehicle plate pending';
+      case 'ambulance_permit':
+        return vehicle?.permitNumber.isNotEmpty == true
+            ? 'Matched to Permit: ${vehicle!.permitNumber}'
+            : 'Permit number pending';
+      case 'insurance_policy':
+        return vehicle?.insurancePolicyNumber.isNotEmpty == true
+            ? 'Matched to Policy: ${vehicle!.insurancePolicyNumber}'
+            : 'Insurance policy pending';
+      case 'commercial_driver_badge':
+        return vehicle?.operatorAffiliation.isNotEmpty == true
+            ? 'Matched to Fleet: ${vehicle!.operatorAffiliation}'
+            : 'Fleet affiliation pending';
+      default:
+        return '';
+    }
+  }
+
   void _showEditProfileSheet(DriverModel driver, VehicleModel? vehicle) {
     final nameCtrl = TextEditingController(text: driver.name);
     final emailCtrl = TextEditingController(text: driver.email);
@@ -475,6 +503,31 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
                     'Insurance Expiry',
                     vehicle?.insuranceExpiryDate.isNotEmpty == true ? vehicle!.insuranceExpiryDate : 'N/A',
                   ),
+                  if (vehicle != null && vehicle.equipmentList.isNotEmpty) ...[
+                    const Divider(height: 18, color: AppColors.divider),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        'Onboard Medical Equipment',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: vehicle.equipmentList.map((eq) => Chip(
+                        label: Text(eq, style: const TextStyle(fontSize: 11, color: AppColors.textPrimary)),
+                        backgroundColor: AppColors.cardDark,
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(color: AppColors.borderDark),
+                      )).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -560,6 +613,15 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
                                     height: 1.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _getDocMatchingSpec(key, driver, vehicle),
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                                 const SizedBox(height: 3),

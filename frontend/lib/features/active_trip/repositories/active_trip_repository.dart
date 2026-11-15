@@ -18,7 +18,12 @@ class ActiveTripRepository {
         await _storageService.setActiveBookingId(null);
         return null;
       }
-      final trip = TripModel.fromJson(Map<String, dynamic>.from(response['trip'] as Map));
+      final tripMap = response['trip'] is Map ? Map<String, dynamic>.from(response['trip']) : null;
+      if (tripMap == null) {
+        await _storageService.setActiveBookingId(null);
+        return null;
+      }
+      final trip = TripModel.fromJson(tripMap);
       await _storageService.setActiveBookingId(trip.bookingReference);
       return trip;
     } catch (_) {
@@ -84,8 +89,8 @@ class ActiveTripRepository {
           'message': message.trim(),
         },
       );
-      if (response is Map<String, dynamic> && response['entry'] is Map<String, dynamic>) {
-        return response['entry'] as Map<String, dynamic>;
+      if (response is Map && response['entry'] is Map) {
+        return Map<String, dynamic>.from(response['entry']);
       }
       return null;
     } catch (_) {

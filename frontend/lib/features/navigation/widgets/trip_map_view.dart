@@ -57,6 +57,7 @@ class TripMapView extends StatefulWidget {
 class _TripMapViewState extends State<TripMapView> {
   final MapController _mapController = MapController();
   double _currentZoom = 15.5;
+  double _mapRotation = 0.0;
   bool _autoFollow = true;
   List<ll.LatLng> _routePoints = [];
 
@@ -475,10 +476,19 @@ class _TripMapViewState extends State<TripMapView> {
           options: MapOptions(
             initialCenter: driverPoint,
             initialZoom: _currentZoom,
+            initialRotation: _mapRotation,
             minZoom: 4.0,
             maxZoom: 19.0,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all,
+              rotationThreshold: 15.0,
+              enableMultiFingerGestureRace: true,
+            ),
             onPositionChanged: (camera, hasGesture) {
               _currentZoom = camera.zoom;
+              if ((_mapRotation - camera.rotation).abs() > 0.5) {
+                setState(() => _mapRotation = camera.rotation);
+              }
               if (hasGesture && _autoFollow) {
                 _autoFollow = false;
               }
@@ -582,12 +592,30 @@ class _TripMapViewState extends State<TripMapView> {
           ),
         ),
 
-        // Recenter & Zoom Controls (Daylight Theme)
+        // Recenter & Zoom & Compass Controls (Daylight Theme)
         Positioned(
           top: 12,
           right: 12,
           child: Column(
             children: [
+              FloatingActionButton.small(
+                heroTag: 'compass_reset_north_nav',
+                tooltip: 'Reset North',
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.ambulanceTeal,
+                elevation: 3,
+                onPressed: () {
+                  try {
+                    _mapController.rotate(0.0);
+                    setState(() => _mapRotation = 0.0);
+                  } catch (_) {}
+                },
+                child: Transform.rotate(
+                  angle: -(_mapRotation * math.pi / 180.0),
+                  child: const Icon(Icons.explore_rounded),
+                ),
+              ),
+              const SizedBox(height: 8),
               FloatingActionButton.small(
                 heroTag: 'recenter_driver_live_gps',
                 tooltip: 'Live Driver Location',

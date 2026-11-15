@@ -53,16 +53,23 @@ class VehicleModel {
     this.isEligible = true,
   });
 
-  factory VehicleModel.fromJson(Map<String, dynamic> json) {
+  factory VehicleModel.fromJson(dynamic raw) {
+    final json = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    List<String> parsedEquipment = const [];
+    final rawEq = json['equipment_list'];
+    if (rawEq is List) {
+      parsedEquipment = rawEq.map((e) => e.toString()).toList();
+    } else if (rawEq is String && rawEq.trim().isNotEmpty) {
+      parsedEquipment = rawEq.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+
     return VehicleModel(
       id: (json['id'] as num?)?.toInt(),
-      registrationNumber: (json['registration_number'] ?? '').toString(),
+      registrationNumber: (json['registration_number'] ?? json['vehicle_plate'] ?? json['plate'] ?? '').toString(),
       vehicleType: VehicleType.fromString(json['vehicle_type']?.toString()),
-      makeModel: (json['make_model'] ?? '').toString(),
+      makeModel: (json['make_model'] ?? json['model'] ?? '').toString(),
       year: (json['year'] as num?)?.toInt() ?? 2024,
-      equipmentList: json['equipment_list'] != null && json['equipment_list'] is List
-          ? (json['equipment_list'] as List).map((e) => e.toString()).toList()
-          : const <String>[],
+      equipmentList: parsedEquipment,
       operatorAffiliation: (json['operator_affiliation'] ?? '').toString(),
       permitNumber: (json['permit_number'] ?? '').toString(),
       permitExpiryDate: (json['permit_expiry_date'] ?? '').toString(),

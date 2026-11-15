@@ -10,6 +10,7 @@ class TripHistoryItem {
   final double distanceKm;
   final int durationMinutes;
   final double earnings;
+  final DateTime startedAt;
   final DateTime completedAt;
   final String? handoverNotes;
   final bool isPaid;
@@ -29,6 +30,7 @@ class TripHistoryItem {
     required this.distanceKm,
     required this.durationMinutes,
     required this.earnings,
+    required this.startedAt,
     required this.completedAt,
     this.handoverNotes,
     this.isPaid = true,
@@ -49,6 +51,7 @@ class TripHistoryItem {
     double? distanceKm,
     int? durationMinutes,
     double? earnings,
+    DateTime? startedAt,
     DateTime? completedAt,
     String? handoverNotes,
     bool? isPaid,
@@ -68,6 +71,7 @@ class TripHistoryItem {
       distanceKm: distanceKm ?? this.distanceKm,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       earnings: earnings ?? this.earnings,
+      startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
       handoverNotes: handoverNotes ?? this.handoverNotes,
       isPaid: isPaid ?? this.isPaid,
@@ -83,16 +87,27 @@ class TripHistoryItem {
     final distMetersVal = (json['distance_remaining_meters'] as num?)?.toDouble();
     final calcDistKm = distKmVal ?? (distMetersVal != null && distMetersVal > 0 ? (distMetersVal / 1000.0) : 6.8);
 
-    final durVal = json['duration_minutes'] as int?;
-    final calcDur = durVal ?? (calcDistKm * 2.4).round().clamp(10, 60);
+    final durVal = (json['duration_minutes'] as num?)?.toInt();
+    final calcDur = (durVal != null && durVal >= 5 && durVal <= 180)
+        ? durVal
+        : (calcDistKm * 2.4).round().clamp(10, 60);
 
     final earnVal = (json['earnings'] as num?)?.toDouble();
-    final calcEarn = earnVal ?? (200.0 + (calcDistKm * 30.0));
+    final calcEarn = earnVal ?? (250.0 + (calcDistKm * 28.0));
 
     final completedStr = json['completed_at'] ?? json['updated_at'] ?? json['accepted_at'] ?? json['created_at'];
     DateTime date = DateTime.now();
     if (completedStr != null) {
-      date = DateTime.tryParse(completedStr.toString()) ?? DateTime.now();
+      date = (DateTime.tryParse(completedStr.toString()) ?? DateTime.now()).toLocal();
+    }
+
+    final startedStr = json['started_at'] ?? json['accepted_at'] ?? json['created_at'];
+    DateTime startDate = date.subtract(Duration(minutes: calcDur));
+    if (startedStr != null) {
+      final parsed = DateTime.tryParse(startedStr.toString())?.toLocal();
+      if (parsed != null && parsed.isBefore(date)) {
+        startDate = parsed;
+      }
     }
 
     final idVal = json['id'] as int? ?? DateTime.now().millisecondsSinceEpoch % 10000;
@@ -108,9 +123,8 @@ class TripHistoryItem {
       paid = (p == 'paid' || p == 'completed' || p == 'success');
       payStatus = paid ? 'Paid' : 'Pending / Unpaid';
     } else {
-      // For realistic demonstration of unpaid trips: every 3rd trip is pending payment
-      paid = (idVal % 3 != 0);
-      payStatus = paid ? 'Paid' : 'Pending Payment';
+      paid = true;
+      payStatus = 'Paid';
     }
 
     return TripHistoryItem(
@@ -120,15 +134,16 @@ class TripHistoryItem {
       patientPhone: json['patient_phone'] as String? ?? json['contact_number'] as String?,
       pickupAddress: json['pickup_address'] as String? ?? 'Pickup Location',
       destinationHospital: json['destination_hospital'] as String? ?? 'Regional Hospital & Trauma Unit',
-      emergencyCategory: json['emergency_category'] as String? ?? 'Critical',
+      emergencyCategory: json['emergency_category'] as String? ?? 'Critical Emergency',
       distanceKm: double.parse(calcDistKm.toStringAsFixed(1)),
       durationMinutes: calcDur,
       earnings: double.parse(calcEarn.toStringAsFixed(0)),
+      startedAt: startDate,
       completedAt: date,
       handoverNotes: json['handover_notes'] as String?,
       isPaid: paid,
       paymentStatus: payStatus,
-      paymentMethod: json['payment_method'] as String? ?? (paid ? 'UPI / Digital Payment' : null),
+      paymentMethod: json['payment_method'] as String? ?? '108 Govt Emergency Service',
       ambulancePlate: json['vehicle_plate'] as String? ?? json['registration_number'] as String?,
       status: json['status'] as String? ?? 'Completed & Handover Signed',
     );
@@ -146,6 +161,7 @@ class TripHistoryItem {
       'distance_km': distanceKm,
       'duration_minutes': durationMinutes,
       'earnings': earnings,
+      'started_at': startedAt.toIso8601String(),
       'completed_at': completedAt.toIso8601String(),
       'handover_notes': handoverNotes,
       'is_paid': isPaid,
