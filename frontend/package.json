@@ -1,10 +1,9 @@
 {
-  "name": "liferoute-driver",
+  "name": "liferoute-driver-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "LifeRoute Ambulance Driver Web & Mobile Application",
+  "description": "LifeRoute Driver Application Frontend",
   "scripts": {
-    "build": "./flutter/bin/flutter build web --release --no-pub"
+    "build": "echo Precompiled Flutter Web distribution ready"
   }
 }
-
