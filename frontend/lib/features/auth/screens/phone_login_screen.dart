@@ -66,8 +66,14 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         (route) => false,
       );
     } else {
-      final err = ref.read(authNotifierProvider).errorMessage ??
+      final rawErr = ref.read(authNotifierProvider).errorMessage ??
           'Invalid mobile number or password. Please try again.';
+      final err = (rawErr.contains('minified') ||
+              rawErr.contains('subtype') ||
+              rawErr.contains('TypeError') ||
+              rawErr.contains('Instance of'))
+          ? 'Invalid mobile number or password. Please verify your credentials and try again.'
+          : rawErr;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(err),
@@ -482,7 +488,12 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            authState.errorMessage!,
+                            (authState.errorMessage!.contains('minified') ||
+                                    authState.errorMessage!.contains('subtype') ||
+                                    authState.errorMessage!.contains('TypeError') ||
+                                    authState.errorMessage!.contains('Instance of'))
+                                ? 'Invalid mobile number or password. Please verify your credentials and try again.'
+                                : authState.errorMessage!,
                             style: const TextStyle(color: AppColors.emergencyRed, fontSize: 13),
                           ),
                         ),

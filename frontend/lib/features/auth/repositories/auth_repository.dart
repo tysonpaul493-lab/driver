@@ -81,9 +81,17 @@ class AuthRepository {
       } catch (_) {}
     }
 
-    if (parsed is Map && parsed['status'] == 'error') {
+    if (parsed is Map && (parsed['status'] == 'error' || parsed['error'] != null)) {
       throw ApiException(
-        message: parsed['message']?.toString() ?? 'Invalid mobile number or password.',
+        message: (parsed['message'] ?? parsed['error'] ?? 'Invalid mobile number or password.').toString(),
+      );
+    }
+
+    if (parsed is! Map || (!parsed.containsKey('driver') && !parsed.containsKey('token') && !parsed.containsKey('phone'))) {
+      throw ApiException(
+        message: (parsed is Map && parsed['message'] != null)
+            ? parsed['message'].toString()
+            : 'Invalid mobile number or password. Please verify your credentials and try again.',
       );
     }
 
