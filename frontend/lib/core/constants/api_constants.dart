@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-const String _kDefaultLiveWebBackend = 'https://assembled-rfc-tables-generators.trycloudflare.com/api/v1';
+const String _kDefaultLiveWebBackend = 'https://vocabulary-banner-ram-sons.trycloudflare.com/api/v1';
 
 String get _detectedHost {
   if (kIsWeb) {
@@ -251,7 +251,7 @@ class ApiConstants {
 
   // Live Dispatch WebSocket Config
   static String get reverbHost => effectiveHost.contains('trycloudflare.com')
-      ? 'measure-science-annually-query.trycloudflare.com'
+      ? 'peoples-membership-acrobat-nation.trycloudflare.com'
       : effectiveHost;
   static int get reverbPort => reverbHost.contains('trycloudflare.com') ? 443 : 8080;
   static String get reverbScheme => reverbHost.contains('trycloudflare.com') ? 'https' : 'http';
