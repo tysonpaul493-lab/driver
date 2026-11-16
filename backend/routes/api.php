@@ -29,6 +29,7 @@ foreach (['/api', '/api/v1', ''] as $prefix) {
         Route::post('/auth/otp/send', [UserAuthController::class, 'sendOtp']);
         Route::post('/auth/otp/verify', [UserAuthController::class, 'verifyOtp']);
         Route::match(['GET', 'POST'], '/auth/lookup-user', [UserAuthController::class, 'lookupUser']);
+        Route::match(['GET', 'POST'], '/user/verify-sim', [UserAuthController::class, 'verifySimCarrier']);
         Route::get('/user/profile', [UserAuthController::class, 'getProfile']);
         Route::put('/user/profile', [UserAuthController::class, 'updateProfile']);
 

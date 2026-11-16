@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -316,7 +317,7 @@ class DioClient {
         error.type == DioExceptionType.sendTimeout ||
         error.type == DioExceptionType.connectionError) {
       return ApiException(
-        message: 'Network connection error. Please check your cellular/Wi-Fi connection.',
+        message: 'Network connection error. Unable to reach dispatch gateway. Please check your internet connection.',
         isNetworkError: true,
       );
     }
@@ -324,18 +325,26 @@ class DioClient {
     final response = error.response;
     if (response != null) {
       final statusCode = response.statusCode;
-      final data = response.data;
+      dynamic data = response.data;
+
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {}
+      }
 
       String message = 'An error occurred (${statusCode ?? "unknown"})';
       Map<String, dynamic>? validationErrors;
 
       if (data is Map) {
-        if (data.containsKey('message')) {
+        if (data.containsKey('message') && data['message'] != null) {
           message = data['message'].toString();
         }
         final rawErrors = data['errors'];
         if (rawErrors is Map) {
-          validationErrors = Map<String, dynamic>.from(rawErrors);
+          try {
+            validationErrors = Map<String, dynamic>.from(rawErrors);
+          } catch (_) {}
         } else if (rawErrors is List && rawErrors.isNotEmpty) {
           message = rawErrors.map((e) => e.toString()).join('\n');
         }
@@ -343,9 +352,17 @@ class DioClient {
 
       // Handle race condition: 409 Conflict (e.g. another driver already accepted)
       if (statusCode == 409) {
-        message = message.isEmpty
+        message = message.isEmpty || message.contains('An error occurred')
             ? 'This booking request was already accepted by another ambulance or cancelled.'
             : message;
+      } else if (statusCode == 401) {
+        if (message.isEmpty || message.contains('An error occurred')) {
+          message = 'Incorrect password. Please verify your registered password.';
+        }
+      } else if (statusCode == 404) {
+        if (message.isEmpty || message.contains('An error occurred')) {
+          message = 'No registered driver account found for this mobile number.';
+        }
       }
 
       return ApiException(

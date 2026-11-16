@@ -35,7 +35,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
   final MapController _mapController = MapController();
   bool _isRequestSheetOpen = false;
   bool _hasCenteredMapOnGps = false;
-  double _mapRotation = 0.0;
+  final ValueNotifier<double> _mapRotationNotifier = ValueNotifier<double>(0.0);
 
   @override
   void initState() {
@@ -57,6 +57,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _mapRotationNotifier.dispose();
     super.dispose();
   }
 
@@ -888,15 +889,17 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                                     locationState.longitude ?? 77.5946,
                                   ),
                                   initialZoom: 15.5,
-                                  initialRotation: _mapRotation,
+                                  initialRotation: _mapRotationNotifier.value,
                                   interactionOptions: const InteractionOptions(
                                     flags: InteractiveFlag.all,
-                                    rotationThreshold: 15.0,
-                                    enableMultiFingerGestureRace: true,
+                                    enableMultiFingerGestureRace: false,
+                                    rotationThreshold: 8.0,
+                                    pinchZoomThreshold: 0.15,
+                                    pinchMoveThreshold: 15.0,
                                   ),
                                   onPositionChanged: (camera, hasGesture) {
-                                    if ((_mapRotation - camera.rotation).abs() > 0.5) {
-                                      setState(() => _mapRotation = camera.rotation);
+                                    if ((_mapRotationNotifier.value - camera.rotation).abs() > 0.2) {
+                                      _mapRotationNotifier.value = camera.rotation;
                                     }
                                   },
                                 ),
@@ -1039,7 +1042,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                               right: 12,
                               child: Column(
                                 children: [
-                                  // Compass / Reset North Button
+                                  // Compass / Reset North Button (Smooth Rotation via ValueNotifier)
                                   Material(
                                     color: AppColors.surfaceDark.withValues(
                                       alpha: 0.9,
@@ -1055,89 +1058,29 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                                       onTap: () {
                                         try {
                                           _mapController.rotate(0.0);
-                                          setState(() => _mapRotation = 0.0);
+                                          _mapRotationNotifier.value = 0.0;
                                         } catch (_) {}
                                       },
                                       child: Padding(
                                         padding: const EdgeInsets.all(8.0),
-                                        child: Transform.rotate(
-                                          angle: -(_mapRotation * math.pi / 180.0),
-                                          child: const Icon(
-                                            Icons.explore_rounded,
-                                            color: AppColors.ambulanceTeal,
-                                            size: 20,
-                                          ),
+                                        child: ValueListenableBuilder<double>(
+                                          valueListenable: _mapRotationNotifier,
+                                          builder: (context, rotation, child) {
+                                            return Transform.rotate(
+                                              angle: -(rotation * math.pi / 180.0),
+                                              child: const Icon(
+                                                Icons.explore_rounded,
+                                                color: AppColors.ambulanceTeal,
+                                                size: 20,
+                                              ),
+                                            );
+                                          },
                                         ),
                                       ),
                                     ),
                                   ),
                                   const SizedBox(height: 6),
-                                  Material(
-                                    color: AppColors.surfaceDark.withValues(
-                                      alpha: 0.9,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: const BorderSide(
-                                        color: AppColors.borderDark,
-                                      ),
-                                    ),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () {
-                                        try {
-                                          final currentZoom =
-                                              _mapController.camera.zoom;
-                                          _mapController.move(
-                                            _mapController.camera.center,
-                                            currentZoom + 1.0,
-                                          );
-                                        } catch (_) {}
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Icon(
-                                          Icons.add_rounded,
-                                          color: AppColors.textPrimary,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Material(
-                                    color: AppColors.surfaceDark.withValues(
-                                      alpha: 0.9,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: const BorderSide(
-                                        color: AppColors.borderDark,
-                                      ),
-                                    ),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () {
-                                        try {
-                                          final currentZoom =
-                                              _mapController.camera.zoom;
-                                          _mapController.move(
-                                            _mapController.camera.center,
-                                            currentZoom - 1.0,
-                                          );
-                                        } catch (_) {}
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Icon(
-                                          Icons.remove_rounded,
-                                          color: AppColors.textPrimary,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
+                                  // Recenter / My Location Button
                                   Material(
                                     color: AppColors.surfaceDark.withValues(
                                       alpha: 0.9,

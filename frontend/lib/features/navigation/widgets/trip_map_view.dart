@@ -233,20 +233,6 @@ class _TripMapViewState extends State<TripMapView> {
     } catch (_) {}
   }
 
-  void _zoomIn() {
-    _currentZoom = math.min(18.5, _currentZoom + 1.0);
-    try {
-      _mapController.move(_mapController.camera.center, _currentZoom);
-    } catch (_) {}
-  }
-
-  void _zoomOut() {
-    _currentZoom = math.max(5.0, _currentZoom - 1.0);
-    try {
-      _mapController.move(_mapController.camera.center, _currentZoom);
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
     final driverPoint = ll.LatLng(widget.currentLat, widget.currentLng);
@@ -481,14 +467,13 @@ class _TripMapViewState extends State<TripMapView> {
             maxZoom: 19.0,
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all,
-              rotationThreshold: 15.0,
-              enableMultiFingerGestureRace: true,
+              enableMultiFingerGestureRace: false,
+              rotationThreshold: 8.0,
+              pinchZoomThreshold: 0.15,
+              pinchMoveThreshold: 15.0,
             ),
             onPositionChanged: (camera, hasGesture) {
               _currentZoom = camera.zoom;
-              if ((_mapRotation - camera.rotation).abs() > 0.5) {
-                setState(() => _mapRotation = camera.rotation);
-              }
               if (hasGesture && _autoFollow) {
                 _autoFollow = false;
               }
@@ -634,26 +619,6 @@ class _TripMapViewState extends State<TripMapView> {
                 elevation: 3,
                 onPressed: _fitRouteBounds,
                 child: const Icon(Icons.route_rounded),
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton.small(
-                heroTag: 'zoom_in_map',
-                tooltip: 'Zoom In',
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.textPrimary,
-                elevation: 3,
-                onPressed: _zoomIn,
-                child: const Icon(Icons.add),
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton.small(
-                heroTag: 'zoom_out_map',
-                tooltip: 'Zoom Out',
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.textPrimary,
-                elevation: 3,
-                onPressed: _zoomOut,
-                child: const Icon(Icons.remove),
               ),
             ],
           ),

@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:dio/dio.dart';
+
 import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../models/auth_response.dart';
@@ -23,7 +27,9 @@ class AuthRepository {
         receiveTimeout: const Duration(seconds: 20),
       ),
     );
-    final map = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final map = response is Map
+        ? Map<String, dynamic>.from(response)
+        : <String, dynamic>{};
     return map;
   }
 
@@ -33,26 +39,21 @@ class AuthRepository {
       '/driver/auth/check-phone',
       data: {'phone': phone},
     );
-    final data = response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    final data = response is Map
+        ? Map<String, dynamic>.from(response)
+        : <String, dynamic>{};
     return data['is_registered'] == true || data['registered'] == true;
   }
 
   /// Verify OTP and store Sanctum token
-  Future<AuthResponse> verifyOtp(
-    String phone,
-    String otp,
-  ) async {
+  Future<AuthResponse> verifyOtp(String phone, String otp) async {
     final response = await _dioClient.post(
       ApiConstants.verifyOtp,
-      data: {
-        'phone': phone,
-        'otp': otp,
-        'device_name': 'Driver Mobile App',
-      },
+      data: {'phone': phone, 'otp': otp, 'device_name': 'Driver Mobile App'},
     );
 
     final authResponse = AuthResponse.fromJson(response);
-    
+
     // Save token and profile to secure storage
     await _storageService.saveAuthToken(authResponse.token);
     await _storageService.saveDriverId(authResponse.driver.id);
@@ -73,7 +74,20 @@ class AuthRepository {
       },
     );
 
-    final authResponse = AuthResponse.fromJson(response);
+    dynamic parsed = response;
+    if (parsed is String) {
+      try {
+        parsed = jsonDecode(parsed);
+      } catch (_) {}
+    }
+
+    if (parsed is Map && parsed['status'] == 'error') {
+      throw ApiException(
+        message: parsed['message']?.toString() ?? 'Invalid mobile number or password.',
+      );
+    }
+
+    final authResponse = AuthResponse.fromJson(parsed);
     await _storageService.saveAuthToken(authResponse.token);
     await _storageService.saveDriverId(authResponse.driver.id);
     await _storageService.saveDriverProfile(authResponse.driver.toJson());
@@ -83,7 +97,11 @@ class AuthRepository {
   }
 
   /// Reset password directly for driver account
-  Future<AuthResponse> resetPassword(String phone, String newPassword, String confirmPassword) async {
+  Future<AuthResponse> resetPassword(
+    String phone,
+    String newPassword,
+    String confirmPassword,
+  ) async {
     final response = await _dioClient.post(
       ApiConstants.resetPassword,
       data: {
@@ -150,7 +168,10 @@ class AuthRepository {
     final authResponse = AuthResponse.fromJson(response);
     // Registration must not set an active login session token: driver must log in with their ID and password
     await _storageService.deleteAuthToken();
-    await _storageService.saveRegisteredDriverByPhone(phone, authResponse.driver.toJson());
+    await _storageService.saveRegisteredDriverByPhone(
+      phone,
+      authResponse.driver.toJson(),
+    );
 
     return authResponse;
   }
@@ -165,12 +186,11 @@ class AuthRepository {
       ApiConstants.uploadDocuments,
       file: file,
       fileField: 'document',
-      extraFields: {
-        'document_type': documentType,
-        'expiry_date': ?expiryDate,
-      },
+      extraFields: {'document_type': documentType, 'expiry_date': ?expiryDate},
     );
-    return response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    return response is Map
+        ? Map<String, dynamic>.from(response)
+        : <String, dynamic>{};
   }
 
   /// Upload compliance documents from raw bytes (Web-safe)
@@ -185,12 +205,11 @@ class AuthRepository {
       bytes: bytes,
       fileName: fileName,
       fileField: 'document',
-      extraFields: {
-        'document_type': documentType,
-        'expiry_date': ?expiryDate,
-      },
+      extraFields: {'document_type': documentType, 'expiry_date': ?expiryDate},
     );
-    return response is Map ? Map<String, dynamic>.from(response) : <String, dynamic>{};
+    return response is Map
+        ? Map<String, dynamic>.from(response)
+        : <String, dynamic>{};
   }
 
   /// Update driver and ambulance profile fields on dispatch backend
@@ -220,7 +239,9 @@ class AuthRepository {
       },
     );
     final rawDriver = response is Map ? (response['driver'] ?? response) : null;
-    final driverMap = rawDriver is Map ? Map<String, dynamic>.from(rawDriver) : <String, dynamic>{};
+    final driverMap = rawDriver is Map
+        ? Map<String, dynamic>.from(rawDriver)
+        : <String, dynamic>{};
     final driver = DriverModel.fromJson(driverMap);
     await _storageService.saveDriverProfile(driver.toJson());
     return driver;
@@ -230,7 +251,9 @@ class AuthRepository {
   Future<DriverModel> getProfile() async {
     final response = await _dioClient.get(ApiConstants.profile);
     final rawDriver = response is Map ? (response['driver'] ?? response) : null;
-    final driverMap = rawDriver is Map ? Map<String, dynamic>.from(rawDriver) : <String, dynamic>{};
+    final driverMap = rawDriver is Map
+        ? Map<String, dynamic>.from(rawDriver)
+        : <String, dynamic>{};
     final driver = DriverModel.fromJson(driverMap);
     await _storageService.saveDriverProfile(driver.toJson());
     return driver;
