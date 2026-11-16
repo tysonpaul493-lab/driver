@@ -75,14 +75,14 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
     _pendingPoller = Timer.periodic(const Duration(seconds: 4), (_) async {
       final isOnline = _ref.read(onlineStatusProvider).isOnline;
       final activeTrip = _ref.read(activeTripProvider);
-      if (!isOnline || activeTrip.hasActiveTrip) return;
+      if (activeTrip.hasActiveTrip) return;
 
       if (_isPollingPending) return;
 
       // When WebSocket is connected, incoming bookings are pushed instantaneously.
       // Poll REST API once every 12s as a safety fallback.
       final reverb = _ref.read(reverbServiceProvider);
-      if (reverb.isConnected) {
+      if (reverb.isConnected && isOnline) {
         _pollerTick = (_pollerTick + 1) % 3;
         if (_pollerTick != 0) return;
       }
@@ -101,32 +101,40 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
           final first = pending.first;
           _ref.read(notificationsProvider.notifier).addBookingAlert(first);
 
-          if (state.currentIncomingRequest == null) {
-            AudioAlertService.playDispatchAlert();
-            DriverNotificationService.instance.showDispatchAlert(
-              id: first.id,
-              title: '🚨 Emergency Dispatch: ${first.emergencyCategory}',
-              body: 'Pickup: ${first.pickupAddress}. Tap to respond.',
-              payload: first.bookingReference,
-            );
-            state = state.copyWith(
-              pendingRequests: pending,
-              currentIncomingRequest: first,
-              conflictMessage: null,
-              errorMessage: null,
-            );
-          } else if (!pending.any(
-            (p) => p.id == state.currentIncomingRequest!.id,
-          )) {
-            // Already accepted by another driver unit!
+          if (isOnline) {
+            if (state.currentIncomingRequest == null) {
+              AudioAlertService.playDispatchAlert();
+              DriverNotificationService.instance.showDispatchAlert(
+                id: first.id,
+                title: '🚨 Emergency Dispatch: ${first.emergencyCategory}',
+                body: 'Pickup: ${first.pickupAddress}. Tap to respond.',
+                payload: first.bookingReference,
+              );
+              state = state.copyWith(
+                pendingRequests: pending,
+                currentIncomingRequest: first,
+                conflictMessage: null,
+                errorMessage: null,
+              );
+            } else if (!pending.any(
+              (p) => p.id == state.currentIncomingRequest!.id,
+            )) {
+              // Already accepted by another driver unit!
+              state = state.copyWith(
+                pendingRequests: pending,
+                clearCurrentRequest: true,
+                conflictMessage:
+                    'This booking was accepted by another ambulance unit.',
+              );
+            } else {
+              state = state.copyWith(pendingRequests: pending);
+            }
+          } else {
+            // Offline driver: keep pending list populated so dashboard banner displays alerts
             state = state.copyWith(
               pendingRequests: pending,
               clearCurrentRequest: true,
-              conflictMessage:
-                  'This booking was accepted by another ambulance unit.',
             );
-          } else {
-            state = state.copyWith(pendingRequests: pending);
           }
         } else if (state.currentIncomingRequest != null) {
           // No more pending requests: another driver claimed it
@@ -139,7 +147,8 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
         } else if (state.pendingRequests.isNotEmpty) {
           state = state.copyWith(pendingRequests: const []);
         }
-      } catch (_) {} finally {
+      } catch (_) {
+      } finally {
         _isPollingPending = false;
       }
     });
@@ -149,44 +158,57 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
     final reverb = _ref.read(reverbServiceProvider);
 
     _reverbRequestSub = reverb.onBookingRequest.listen((data) {
-      if (!_ref.read(onlineStatusProvider).isOnline ||
-          _ref.read(activeTripProvider).hasActiveTrip) {
+      if (_ref.read(activeTripProvider).hasActiveTrip) {
         return;
       }
       final request = BookingRequestModel.fromJson(data);
       if (_declinedBookingIds.contains(request.id)) return;
-      // Play high priority dispatch alert tone & vibration
-      AudioAlertService.playDispatchAlert();
-      DriverNotificationService.instance.showDispatchAlert(
-        id: request.id,
-        title: '🚨 Emergency Dispatch: ${request.emergencyCategory}',
-        body: 'Pickup: ${request.pickupAddress}. Tap to respond.',
-        payload: request.bookingReference,
-      );
-      // Add alert with user details to Notifications screen
+
+      final isOnline = _ref.read(onlineStatusProvider).isOnline;
       _ref.read(notificationsProvider.notifier).addBookingAlert(request);
-      state = state.copyWith(
-        currentIncomingRequest: request,
-        conflictMessage: null,
-        errorMessage: null,
-      );
+
+      if (isOnline) {
+        AudioAlertService.playDispatchAlert();
+        DriverNotificationService.instance.showDispatchAlert(
+          id: request.id,
+          title: '🚨 Emergency Dispatch: ${request.emergencyCategory}',
+          body: 'Pickup: ${request.pickupAddress}. Tap to respond.',
+          payload: request.bookingReference,
+        );
+        state = state.copyWith(
+          currentIncomingRequest: request,
+          conflictMessage: null,
+          errorMessage: null,
+        );
+      } else {
+        final existing = state.pendingRequests.where((p) => p.id != request.id);
+        state = state.copyWith(
+          pendingRequests: [request, ...existing],
+        );
+      }
     });
 
     _reverbClaimedSub = reverb.onBookingClaimedByOther.listen((data) {
-      final bookingId = int.tryParse(data['booking_id']?.toString() ?? '') ??
+      final bookingId =
+          int.tryParse(data['booking_id']?.toString() ?? '') ??
           int.tryParse(data['id']?.toString() ?? '');
       final bookingRef = data['booking_reference']?.toString();
 
       final remainingPending = state.pendingRequests.where((p) {
         if (bookingId != null && p.id == bookingId) return false;
-        if (bookingRef != null && p.bookingReference == bookingRef) return false;
+        if (bookingRef != null && p.bookingReference == bookingRef) {
+          return false;
+        }
         return true;
       }).toList();
 
-      final isCurrent = state.currentIncomingRequest != null &&
-          ((bookingId != null && state.currentIncomingRequest!.id == bookingId) ||
+      final isCurrent =
+          state.currentIncomingRequest != null &&
+          ((bookingId != null &&
+                  state.currentIncomingRequest!.id == bookingId) ||
               (bookingRef != null &&
-                  state.currentIncomingRequest!.bookingReference == bookingRef));
+                  state.currentIncomingRequest!.bookingReference ==
+                      bookingRef));
 
       if (isCurrent) {
         AudioAlertService.playErrorAlert();
@@ -208,20 +230,26 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
     });
 
     _reverbCancelledSub = reverb.onBookingCancelled.listen((data) {
-      final bookingId = int.tryParse(data['booking_id']?.toString() ?? '') ??
+      final bookingId =
+          int.tryParse(data['booking_id']?.toString() ?? '') ??
           int.tryParse(data['id']?.toString() ?? '');
       final bookingRef = data['booking_reference']?.toString();
 
       final remainingPending = state.pendingRequests.where((p) {
         if (bookingId != null && p.id == bookingId) return false;
-        if (bookingRef != null && p.bookingReference == bookingRef) return false;
+        if (bookingRef != null && p.bookingReference == bookingRef) {
+          return false;
+        }
         return true;
       }).toList();
 
-      final isCurrent = state.currentIncomingRequest != null &&
-          ((bookingId != null && state.currentIncomingRequest!.id == bookingId) ||
+      final isCurrent =
+          state.currentIncomingRequest != null &&
+          ((bookingId != null &&
+                  state.currentIncomingRequest!.id == bookingId) ||
               (bookingRef != null &&
-                  state.currentIncomingRequest!.bookingReference == bookingRef));
+                  state.currentIncomingRequest!.bookingReference ==
+                      bookingRef));
 
       if (bookingId != null) {
         DriverNotificationService.instance.cancel(bookingId);
@@ -272,13 +300,11 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
         'driver_id': driver?.id ?? 0,
         'driver_name': driver?.name.isNotEmpty == true ? driver!.name : '',
         'driver_phone': driver?.phone.isNotEmpty == true ? driver!.phone : '',
-        'ambulance_plate':
-            driver?.assignedVehicle?.registrationNumber ?? '',
+        'ambulance_plate': driver?.assignedVehicle?.registrationNumber ?? '',
         'vehicle_type':
             driver?.assignedVehicle?.vehicleType.displayName ??
             'Emergency Ambulance',
-        'vehicle_model':
-            driver?.assignedVehicle?.makeModel ?? '',
+        'vehicle_model': driver?.assignedVehicle?.makeModel ?? '',
         'driver_rating': driver?.rating ?? 5.0,
         'status': 'accepted',
         'accepted_at': DateTime.now().toIso8601String(),

@@ -75,7 +75,7 @@ class OnlineStatusNotifier extends StateNotifier<OnlineStatusState> {
     final storage = _ref.read(storageServiceProvider);
     final driver = _ref.read(currentDriverProvider);
     final storedOnline = await storage.getOnlineStatus();
-    final isOnline = storedOnline || (driver?.isOnline ?? false);
+    final isOnline = storedOnline || (driver?.isOnline ?? true);
     if (!mounted) return;
     state = state.copyWith(isOnline: isOnline);
     if (isOnline && driver != null && driver.verificationStatus.isApproved) {
