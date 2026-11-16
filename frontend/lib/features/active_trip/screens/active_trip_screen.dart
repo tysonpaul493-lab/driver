@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,24 +27,44 @@ class ActiveTripScreen extends ConsumerStatefulWidget {
 class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
   final _handoverNotesController = TextEditingController();
   double? _liveRoadDistanceMeters;
+  Timer? _liveClockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _liveClockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _liveClockTimer?.cancel();
     _handoverNotesController.dispose();
     super.dispose();
   }
 
   String _formatTripStatusTime(TripModel trip) {
     if (trip.status == TripStatus.completed && trip.completedAt != null) {
-      return AppDateUtils.formatTime(trip.completedAt!);
+      return AppDateUtils.formatTime(trip.completedAt!, includeSeconds: true);
     }
-    if (trip.status == TripStatus.patientOnboard && trip.patientPickedUpAt != null) {
-      return AppDateUtils.formatTime(trip.patientPickedUpAt!);
+    if (trip.status == TripStatus.patientOnboard &&
+        trip.patientPickedUpAt != null) {
+      return AppDateUtils.formatTime(trip.patientPickedUpAt!, includeSeconds: true);
     }
-    if (trip.status == TripStatus.arrivedAtPickup && trip.arrivedPickupAt != null) {
-      return AppDateUtils.formatTime(trip.arrivedPickupAt!);
+    if (trip.status == TripStatus.arrivedAtPickup &&
+        trip.arrivedPickupAt != null) {
+      return AppDateUtils.formatTime(trip.arrivedPickupAt!, includeSeconds: true);
     }
-    return AppDateUtils.formatTime(trip.acceptedAt);
+    return AppDateUtils.formatTime(trip.acceptedAt, includeSeconds: true);
+  }
+
+  String _elapsedTripTime(TripModel trip) {
+    final startTime = trip.acceptedAt.toLocal();
+    final endTime = trip.completedAt?.toLocal() ?? DateTime.now();
+    final diff = endTime.difference(startTime);
+    if (diff.isNegative) return '00:00 min';
+    return AppDateUtils.formatDuration(diff);
   }
 
   Future<void> _makePhoneCall(String? phoneNumber) async {
@@ -169,11 +190,12 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
   void _showPatientChatSheet(TripModel trip) {
     ref.read(activeTripProvider.notifier).markChatRead();
     ref.read(activeTripProvider.notifier).refreshChat();
-    final callerLabel = (trip.patientName != null && trip.patientName!.trim().isNotEmpty)
+    final callerLabel =
+        (trip.patientName != null && trip.patientName!.trim().isNotEmpty)
         ? trip.patientName!.trim()
         : ((trip.contactNumber != null && trip.contactNumber!.trim().isNotEmpty)
-            ? trip.contactNumber!.trim()
-            : trip.bookingReference);
+              ? trip.contactNumber!.trim()
+              : trip.bookingReference);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -228,7 +250,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: isCurrent ? Colors.white : AppColors.textSecondary,
+                              color: isCurrent
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
                             ),
                           ),
                   ),
@@ -279,7 +303,11 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                       width: 110,
                       height: 110,
                       decoration: BoxDecoration(
-                        color: (isCancelled ? AppColors.emergencyRed : AppColors.ambulanceTeal).withValues(alpha: 0.08),
+                        color:
+                            (isCancelled
+                                    ? AppColors.emergencyRed
+                                    : AppColors.ambulanceTeal)
+                                .withValues(alpha: 0.08),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -290,14 +318,18 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                         color: AppColors.surfaceDark,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isCancelled ? AppColors.emergencyRed : AppColors.ambulanceTeal,
+                          color: isCancelled
+                              ? AppColors.emergencyRed
+                              : AppColors.ambulanceTeal,
                           width: 2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: (isCancelled ? AppColors.emergencyRed : AppColors.ambulanceTeal).withValues(
-                              alpha: 0.2,
-                            ),
+                            color:
+                                (isCancelled
+                                        ? AppColors.emergencyRed
+                                        : AppColors.ambulanceTeal)
+                                    .withValues(alpha: 0.2),
                             blurRadius: 18,
                             spreadRadius: 2,
                           ),
@@ -305,8 +337,12 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                       ),
                       child: Center(
                         child: Icon(
-                          isCancelled ? Icons.cancel_rounded : Icons.emergency_rounded,
-                          color: isCancelled ? AppColors.emergencyRed : AppColors.ambulanceTeal,
+                          isCancelled
+                              ? Icons.cancel_rounded
+                              : Icons.emergency_rounded,
+                          color: isCancelled
+                              ? AppColors.emergencyRed
+                              : AppColors.ambulanceTeal,
                           size: 42,
                         ),
                       ),
@@ -315,7 +351,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  isCancelled ? 'Emergency Trip Cancelled' : 'Awaiting Ambulance Booking',
+                  isCancelled
+                      ? 'Emergency Trip Cancelled'
+                      : 'Awaiting Ambulance Booking',
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 20,
@@ -338,7 +376,9 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                 if (isCancelled)
                   ElevatedButton.icon(
                     onPressed: () {
-                      ref.read(activeTripProvider.notifier).dismissCancellation();
+                      ref
+                          .read(activeTripProvider.notifier)
+                          .dismissCancellation();
                       widget.onBackToHome?.call();
                     },
                     icon: const Icon(Icons.arrow_back_rounded),
@@ -346,8 +386,13 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ambulanceTeal,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   )
                 else
@@ -356,38 +401,38 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                       horizontal: 16,
                       vertical: 10,
                     ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceDark,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.borderDark),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      PulseIndicator(
-                        color: onlineState.isOnline
-                            ? AppColors.statusGreen
-                            : AppColors.alertOrange,
-                        size: 8,
-                        isPulsing: onlineState.isOnline,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        onlineState.isOnline
-                            ? 'DISPATCH SYSTEM: ONLINE & LISTENING'
-                            : 'DISPATCH SYSTEM: OFFLINE',
-                        style: TextStyle(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceDark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.borderDark),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PulseIndicator(
                           color: onlineState.isOnline
                               ? AppColors.statusGreen
                               : AppColors.alertOrange,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.4,
+                          size: 8,
+                          isPulsing: onlineState.isOnline,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Text(
+                          onlineState.isOnline
+                              ? 'DISPATCH SYSTEM: ONLINE & LISTENING'
+                              : 'DISPATCH SYSTEM: OFFLINE',
+                          style: TextStyle(
+                            color: onlineState.isOnline
+                                ? AppColors.statusGreen
+                                : AppColors.alertOrange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 if (widget.onBackToHome != null) ...[
                   const SizedBox(height: 22),
                   CustomButton(
@@ -414,7 +459,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
         ? trip.destinationHospital
         : trip.pickupAddress;
 
-    final isAtStop = trip.status == TripStatus.arrivedAtPickup ||
+    final isAtStop =
+        trip.status == TripStatus.arrivedAtPickup ||
         trip.status == TripStatus.arrivedAtHospital ||
         trip.status.isFinished;
 
@@ -423,7 +469,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
     if (!isAtStop) {
       if (_liveRoadDistanceMeters != null && _liveRoadDistanceMeters! > 0) {
         distanceMeters = _liveRoadDistanceMeters!;
-      } else if (locationState.latitude != null && locationState.longitude != null) {
+      } else if (locationState.latitude != null &&
+          locationState.longitude != null) {
         distanceMeters = DistanceUtils.calculateDrivingDistanceMeters(
           locationState.latitude!,
           locationState.longitude!,
@@ -461,11 +508,11 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
               ],
             ),
             Text(
-              '${trip.status.displayTitle} • ${_formatTripStatusTime(trip)}',
+              '${trip.status.displayTitle} • ⏱ ${_elapsedTripTime(trip)} • ${_formatTripStatusTime(trip)}',
               style: const TextStyle(
                 color: AppColors.ambulanceTeal,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -546,7 +593,10 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.ambulanceTeal.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(6),
@@ -646,11 +696,15 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                (trip.patientName != null && trip.patientName!.trim().isNotEmpty)
+                                (trip.patientName != null &&
+                                        trip.patientName!.trim().isNotEmpty)
                                     ? trip.patientName!
-                                    : ((trip.contactNumber != null && trip.contactNumber!.trim().isNotEmpty)
-                                        ? trip.contactNumber!
-                                        : trip.bookingReference),
+                                    : ((trip.contactNumber != null &&
+                                              trip.contactNumber!
+                                                  .trim()
+                                                  .isNotEmpty)
+                                          ? trip.contactNumber!
+                                          : trip.bookingReference),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -961,7 +1015,10 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
 
                     // Status Checkpoint Timestamps Bar
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.cardDark,
                         borderRadius: BorderRadius.circular(10),
@@ -972,14 +1029,32 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.access_time_filled_rounded, size: 15, color: AppColors.ambulanceTeal),
+                              const Icon(
+                                Icons.access_time_filled_rounded,
+                                size: 15,
+                                color: AppColors.ambulanceTeal,
+                              ),
                               const SizedBox(width: 6),
                               Text(
-                                'Dispatched: ${AppDateUtils.formatTime(trip.acceptedAt)}',
+                                'Dispatched: ${AppDateUtils.formatTime(trip.acceptedAt, includeSeconds: true)}',
                                 style: const TextStyle(
                                   color: AppColors.textPrimary,
-                                  fontSize: 12,
+                                  fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.timer_rounded, size: 14, color: AppColors.statusGreen),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Live: ${AppDateUtils.formatTime(DateTime.now(), includeSeconds: true)}',
+                                style: const TextStyle(
+                                  color: AppColors.statusGreen,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
@@ -1314,7 +1389,9 @@ class _DriverPatientChatSheetState
                           child: Text(
                             msgText,
                             style: TextStyle(
-                              color: isDriver ? Colors.white : AppColors.textPrimary,
+                              color: isDriver
+                                  ? Colors.white
+                                  : AppColors.textPrimary,
                               fontWeight: isDriver
                                   ? FontWeight.w600
                                   : FontWeight.w500,
@@ -1337,7 +1414,11 @@ class _DriverPatientChatSheetState
                 side: const BorderSide(color: AppColors.borderDark),
                 label: Text(
                   _quickReplies[i],
-                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 onPressed: () => _send(_quickReplies[i]),
               ),

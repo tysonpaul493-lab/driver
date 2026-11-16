@@ -133,16 +133,16 @@ class TripModel {
       distanceRemainingMeters: (json['distance_remaining_meters'] as num?)?.toDouble() ?? 0.0,
       etaRemaining: json['eta_remaining']?.toString() ?? '',
       acceptedAt: (json['accepted_at'] ?? json['dispatched_at'] ?? json['created_at']) != null
-          ? DateTime.tryParse((json['accepted_at'] ?? json['dispatched_at'] ?? json['created_at']).toString()) ?? DateTime.now()
+          ? (DateTime.tryParse((json['accepted_at'] ?? json['dispatched_at'] ?? json['created_at']).toString())?.toLocal() ?? DateTime.now())
           : DateTime.now(),
       arrivedPickupAt: json['arrived_pickup_at'] != null
-          ? DateTime.tryParse(json['arrived_pickup_at'].toString())
+          ? DateTime.tryParse(json['arrived_pickup_at'].toString())?.toLocal()
           : null,
       patientPickedUpAt: json['patient_picked_up_at'] != null
-          ? DateTime.tryParse(json['patient_picked_up_at'].toString())
+          ? DateTime.tryParse(json['patient_picked_up_at'].toString())?.toLocal()
           : null,
       completedAt: json['completed_at'] != null
-          ? DateTime.tryParse(json['completed_at'].toString())
+          ? DateTime.tryParse(json['completed_at'].toString())?.toLocal()
           : null,
       handoverNotes: json['handover_notes'] as String?,
     );
