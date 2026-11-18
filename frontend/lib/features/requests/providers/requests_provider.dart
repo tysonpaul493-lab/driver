@@ -75,7 +75,17 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
     _pendingPoller = Timer.periodic(const Duration(seconds: 4), (_) async {
       final isOnline = _ref.read(onlineStatusProvider).isOnline;
       final activeTrip = _ref.read(activeTripProvider);
-      if (activeTrip.hasActiveTrip) return;
+
+      // Busy on active trip or offline: Never show incoming request popups
+      if (activeTrip.hasActiveTrip || !isOnline) {
+        if (state.currentIncomingRequest != null || state.pendingRequests.isNotEmpty) {
+          state = state.copyWith(
+            pendingRequests: const [],
+            clearCurrentRequest: true,
+          );
+        }
+        return;
+      }
 
       if (_isPollingPending) return;
 

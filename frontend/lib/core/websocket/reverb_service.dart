@@ -37,9 +37,23 @@ class ReverbService {
 
   bool get isConnected => _isConnected;
 
+  String _buildWsUrl() {
+    final useTls = ApiConstants.reverbScheme == 'https' ||
+        kIsWeb ||
+        ApiConstants.reverbHost.contains('trycloudflare.com') ||
+        ApiConstants.reverbPort == 443;
+    final scheme = useTls ? 'wss' : 'ws';
+    final host = ApiConstants.reverbHost;
+    final port = ApiConstants.reverbPort;
+    if (useTls && (port == 443 || port == 80)) {
+      return '$scheme://$host';
+    }
+    return '$scheme://$host:$port';
+  }
+
   /// Connect to WebSocket server across both Web and Mobile
   Future<void> connect(int driverId) async {
-    final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
+    final wsUrl = _buildWsUrl();
     if (_isConnected &&
         _directChannel != null &&
         _subscribedDriverId == driverId &&
@@ -53,7 +67,7 @@ class ReverbService {
   /// Reconnect active WebSocket stream (e.g. after changing dispatch server host)
   Future<void> reconnectIfActive({bool force = false}) async {
     if (_subscribedDriverId == null) return;
-    final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
+    final wsUrl = _buildWsUrl();
     if (!force &&
         _isConnected &&
         _directChannel != null &&
@@ -65,7 +79,7 @@ class ReverbService {
 
   void _connectDirectSocket(int driverId) {
     try {
-      final wsUrl = 'ws://${ApiConstants.reverbHost}:${ApiConstants.reverbPort}';
+      final wsUrl = _buildWsUrl();
       debugPrint('🔌 [ReverbService] Connecting WebSocket: $wsUrl');
       _reconnectTimer?.cancel();
       _pingTimer?.cancel();
