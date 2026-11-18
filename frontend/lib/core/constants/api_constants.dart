@@ -1,7 +1,9 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-const String _kDefaultLiveWebBackend = 'https://bottle-equilibrium-vcr-introductory.trycloudflare.com/api/v1';
+const String _kDefaultLiveWebBackend =
+    'https://bottle-equilibrium-vcr-introductory.trycloudflare.com/api/v1';
 
 String get _detectedHost {
   if (ApiConstants.configuredApiUrl.isNotEmpty) {
@@ -44,14 +46,17 @@ class ApiConstants {
 
   static bool get hasCustomServerHost =>
       _customServerHost != null &&
-      (!kIsWeb || (!_customServerHost!.contains('localhost') && !_customServerHost!.contains('127.0.0.1')));
+      (!kIsWeb ||
+          (!_customServerHost!.contains('localhost') &&
+              !_customServerHost!.contains('127.0.0.1')));
 
   /// User-friendly label of the current server endpoint for notifications and error messages
   static String get displayServerEndpoint {
     if (kIsWeb) {
       return 'Cloudflare Dispatch Gateway';
     }
-    if (effectiveHost.startsWith('http://') || effectiveHost.startsWith('https://')) {
+    if (effectiveHost.startsWith('http://') ||
+        effectiveHost.startsWith('https://')) {
       return effectiveHost.replaceAll(RegExp(r'^https?://'), '');
     }
     return '$effectiveHost:8000';
@@ -61,7 +66,10 @@ class ApiConstants {
   static List<String> get candidateHosts {
     if (kIsWeb) {
       return [
-        if (hasCustomServerHost) _customServerHost! else _kDefaultLiveWebBackend,
+        if (hasCustomServerHost)
+          _customServerHost!
+        else
+          _kDefaultLiveWebBackend,
       ];
     }
 
@@ -117,7 +125,10 @@ class ApiConstants {
       }
       _customFullBaseUrl = url;
 
-      var cleaned = trimmed.replaceAll(RegExp(r'^https?://', caseSensitive: false), '');
+      var cleaned = trimmed.replaceAll(
+        RegExp(r'^https?://', caseSensitive: false),
+        '',
+      );
       cleaned = cleaned.split('/').first.trim();
       if (cleaned.contains(':')) {
         cleaned = cleaned.split(':').first.trim();
@@ -127,7 +138,10 @@ class ApiConstants {
       return;
     }
 
-    var cleaned = trimmed.replaceAll(RegExp(r'^https?://', caseSensitive: false), '');
+    var cleaned = trimmed.replaceAll(
+      RegExp(r'^https?://', caseSensitive: false),
+      '',
+    );
     cleaned = cleaned.split('/').first.trim();
     if (cleaned.contains(':')) {
       cleaned = cleaned.split(':').first.trim();
@@ -149,8 +163,12 @@ class ApiConstants {
       if (host.startsWith('http://') || host.startsWith('https://')) {
         if (!host.contains('localhost') && !host.contains('127.0.0.1')) {
           var url = host;
-          if (url.endsWith('/')) url = url.substring(0, url.length - 1);
-          if (!url.endsWith('/api/v1') && !url.endsWith('/api')) url = '$url/api/v1';
+          if (url.endsWith('/')) {
+            url = url.substring(0, url.length - 1);
+          }
+          if (!url.endsWith('/api/v1') && !url.endsWith('/api')) {
+            url = '$url/api/v1';
+          }
           return url;
         }
       }
@@ -164,8 +182,12 @@ class ApiConstants {
     }
     if (host.startsWith('http://') || host.startsWith('https://')) {
       var url = host;
-      if (url.endsWith('/')) url = url.substring(0, url.length - 1);
-      if (!url.endsWith('/api/v1') && !url.endsWith('/api')) url = '$url/api/v1';
+      if (url.endsWith('/')) {
+        url = url.substring(0, url.length - 1);
+      }
+      if (!url.endsWith('/api/v1') && !url.endsWith('/api')) {
+        url = '$url/api/v1';
+      }
       return url;
     }
     return 'http://$host:8000/api/v1';
@@ -240,14 +262,18 @@ class ApiConstants {
   static String get reverbHost => effectiveHost.contains('trycloudflare.com')
       ? 'campus-virgin-plants-termination.trycloudflare.com'
       : effectiveHost;
-  static int get reverbPort => reverbHost.contains('trycloudflare.com') ? 443 : 8080;
-  static String get reverbScheme => reverbHost.contains('trycloudflare.com') ? 'https' : 'http';
+  static int get reverbPort =>
+      reverbHost.contains('trycloudflare.com') ? 443 : 8080;
+  static String get reverbScheme =>
+      reverbHost.contains('trycloudflare.com') ? 'https' : 'http';
   static const String reverbAppKey = 'liferoute_reverb_key';
   static const String reverbAuthEndpoint = '/broadcasting/auth';
 
   // Channels
-  static String driverPrivateChannel(int driverId) => 'private-driver.$driverId';
-  static String bookingPrivateChannel(int bookingId) => 'private-booking.$bookingId';
+  static String driverPrivateChannel(int driverId) =>
+      'private-driver.$driverId';
+  static String bookingPrivateChannel(int bookingId) =>
+      'private-booking.$bookingId';
   static const String emergencyBroadcastChannel = 'emergency-broadcasts';
 
   // Timeouts
