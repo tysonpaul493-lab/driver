@@ -192,9 +192,7 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
         );
       } else {
         final existing = state.pendingRequests.where((p) => p.id != request.id);
-        state = state.copyWith(
-          pendingRequests: [request, ...existing],
-        );
+        state = state.copyWith(pendingRequests: [request, ...existing]);
       }
     });
 

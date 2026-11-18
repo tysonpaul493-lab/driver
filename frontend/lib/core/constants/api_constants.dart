@@ -4,19 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 const String _kDefaultLiveWebBackend = 'https://bottle-equilibrium-vcr-introductory.trycloudflare.com/api/v1';
 
 String get _detectedHost {
-  if (kIsWeb) {
-    if (ApiConstants.configuredApiUrl.isNotEmpty) {
-      return ApiConstants.configuredApiUrl;
-    }
-    return _kDefaultLiveWebBackend;
+  if (ApiConstants.configuredApiUrl.isNotEmpty) {
+    return ApiConstants.configuredApiUrl;
   }
-  try {
-    // Primary default for standalone Android APK on LAN Wi-Fi
-    if (Platform.isAndroid) return ApiConstants.fallbackLanHost;
-    return 'localhost';
-  } catch (_) {
-    return 'localhost';
-  }
+  // Primary default for standalone Android APK and Web: Live Cloudflare Dispatch Gateway
+  return _kDefaultLiveWebBackend;
 }
 
 /// API Endpoints and Dispatch Network Configuration
@@ -87,6 +79,7 @@ class ApiConstants {
     }
 
     addHost(_runtimeFallbackHost);
+    addHost(_kDefaultLiveWebBackend);
     addHost(fallbackLanHost);
     try {
       if (Platform.isAndroid) {
@@ -182,27 +175,21 @@ class ApiConstants {
   // For USB debugging use 127.0.0.1 with adb reverse
   // For multi-device Wi-Fi LAN use PC LAN IP e.g. 192.168.0.112
   static String get defaultBaseUrl {
-    if (kIsWeb) {
-      if (_customFullBaseUrl != null &&
-          _customFullBaseUrl!.isNotEmpty &&
-          !_customFullBaseUrl!.contains('localhost') &&
-          !_customFullBaseUrl!.contains('127.0.0.1')) {
-        return _customFullBaseUrl!;
-      }
-      if (configuredApiUrl.isNotEmpty &&
-          !configuredApiUrl.contains('localhost') &&
-          !configuredApiUrl.contains('127.0.0.1')) {
-        return configuredApiUrl;
-      }
-      return _kDefaultLiveWebBackend;
-    }
-    if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
+    if (_customFullBaseUrl != null &&
+        _customFullBaseUrl!.isNotEmpty &&
+        !_customFullBaseUrl!.contains('localhost') &&
+        !_customFullBaseUrl!.contains('127.0.0.1')) {
       return _customFullBaseUrl!;
     }
-    if (configuredApiUrl.isNotEmpty) {
+    if (configuredApiUrl.isNotEmpty &&
+        !configuredApiUrl.contains('localhost') &&
+        !configuredApiUrl.contains('127.0.0.1')) {
       return configuredApiUrl;
     }
-    return baseUrlForHost(effectiveHost);
+    if (_runtimeFallbackHost != null && _runtimeFallbackHost!.isNotEmpty) {
+      return baseUrlForHost(_runtimeFallbackHost!);
+    }
+    return _kDefaultLiveWebBackend;
   }
 
   // Indian Emergency Dispatch & Ambulance Control Numbers
