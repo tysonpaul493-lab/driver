@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 const String _kDefaultLiveWebBackend =
-    'https://posts-duration-leisure-notebook.trycloudflare.com/api/v1';
+    'https://activated-concepts-busy-syndication.trycloudflare.com/api/v1';
 
 String get _detectedHost {
   if (ApiConstants.configuredApiUrl.isNotEmpty) {
@@ -126,6 +126,8 @@ class ApiConstants {
     _runtimeFallbackHost = trimmed.isEmpty ? null : trimmed;
   }
 
+  static String? get customFullBaseUrl => _customFullBaseUrl;
+
   /// Configure custom server host/IP (or null/empty to revert to automatic detection)
   static void setServerHost(String? rawHost) {
     final trimmed = rawHost?.trim() ?? '';
@@ -159,6 +161,29 @@ class ApiConstants {
       return;
     }
 
+    // Auto-detect cloud tunnel domains entered without scheme
+    if (trimmed.contains('trycloudflare.com') ||
+        trimmed.contains('ngrok') ||
+        (trimmed.contains('.') &&
+            !RegExp(r'^\d+\.\d+\.\d+\.\d+').hasMatch(trimmed) &&
+            !trimmed.contains(':8000'))) {
+      var url = 'https://$trimmed';
+      if (url.endsWith('/')) {
+        url = url.substring(0, url.length - 1);
+      }
+      if (!url.endsWith('/api/v1') && !url.endsWith('/api')) {
+        url = '$url/api/v1';
+      }
+      _customFullBaseUrl = url;
+      var cleaned = trimmed.split('/').first.trim();
+      if (cleaned.contains(':')) {
+        cleaned = cleaned.split(':').first.trim();
+      }
+      _customServerHost = cleaned.isEmpty ? null : cleaned;
+      _runtimeFallbackHost = null;
+      return;
+    }
+
     var cleaned = trimmed.replaceAll(
       RegExp(r'^https?://', caseSensitive: false),
       '',
@@ -174,7 +199,9 @@ class ApiConstants {
 
   /// Build base API URL for an explicit host
   static String baseUrlForHost(String host) {
-    if (_customFullBaseUrl != null && _customFullBaseUrl!.isNotEmpty) {
+    if (_customFullBaseUrl != null &&
+        _customFullBaseUrl!.isNotEmpty &&
+        (host == _customServerHost || host == effectiveHost)) {
       return _customFullBaseUrl!;
     }
     if (host.startsWith('http://') || host.startsWith('https://')) {
@@ -186,6 +213,9 @@ class ApiConstants {
         url = '$url/api/v1';
       }
       return url;
+    }
+    if (host.contains('trycloudflare.com') || host.contains('ngrok')) {
+      return 'https://$host/api/v1';
     }
     if (configuredApiUrl.isNotEmpty) {
       return configuredApiUrl;
@@ -266,7 +296,7 @@ class ApiConstants {
 
   // Live Dispatch WebSocket Config
   static String get reverbHost => effectiveHost.contains('trycloudflare.com')
-      ? 'reynolds-geo-nature-restaurants.trycloudflare.com'
+      ? 'realize-glucose-fired-affiliated.trycloudflare.com'
       : effectiveHost;
   static int get reverbPort =>
       reverbHost.contains('trycloudflare.com') ? 443 : 8080;

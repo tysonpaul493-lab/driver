@@ -13,7 +13,9 @@ Future<void> showDriverServerSettingsDialog(BuildContext context, WidgetRef ref)
   if (!context.mounted) return;
 
   final controller = TextEditingController(
-    text: (stored != null && stored.isNotEmpty) ? stored : ApiConstants.effectiveHost,
+    text: (stored != null && stored.isNotEmpty)
+        ? stored
+        : (ApiConstants.customFullBaseUrl ?? ApiConstants.defaultBaseUrl),
   );
 
   bool isTesting = false;
@@ -134,10 +136,10 @@ Future<void> showDriverServerSettingsDialog(BuildContext context, WidgetRef ref)
                       await storage.setCustomApiUrl(null);
                       ref.read(dioClientProvider).refreshBaseUrl();
                       await ref.read(reverbServiceProvider).reconnectIfActive();
-                      controller.text = ApiConstants.effectiveHost;
+                      controller.text = ApiConstants.defaultBaseUrl;
                       setState(() {
                         isHealthy = null;
-                        statusText = 'Reset to automatic host (${ApiConstants.effectiveHost}).';
+                        statusText = 'Reset to automatic host (${ApiConstants.displayServerEndpoint}).';
                       });
                     },
               child: const Text(
@@ -160,7 +162,9 @@ Future<void> showDriverServerSettingsDialog(BuildContext context, WidgetRef ref)
                       final raw = controller.text.trim();
                       ApiConstants.setServerHost(raw);
                       await storage.setCustomApiUrl(
-                        ApiConstants.hasCustomServerHost ? ApiConstants.effectiveHost : null,
+                        ApiConstants.hasCustomServerHost
+                            ? (ApiConstants.customFullBaseUrl ?? raw)
+                            : null,
                       );
                       final dio = ref.read(dioClientProvider);
                       dio.refreshBaseUrl();
@@ -171,8 +175,8 @@ Future<void> showDriverServerSettingsDialog(BuildContext context, WidgetRef ref)
                         isTesting = false;
                         isHealthy = ok;
                         statusText = ok
-                            ? 'Connected to Dispatch Server (${ApiConstants.effectiveHost})'
-                            : 'Saved host (${ApiConstants.effectiveHost}), but server did not respond on port 8000.';
+                            ? 'Connected to Dispatch Server (${ApiConstants.displayServerEndpoint})'
+                            : 'Saved host (${ApiConstants.displayServerEndpoint}), but server did not respond at ${ApiConstants.defaultBaseUrl}.';
                       });
                     },
               style: ElevatedButton.styleFrom(

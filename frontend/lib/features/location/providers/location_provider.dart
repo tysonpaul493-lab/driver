@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../auth/providers/auth_provider.dart';
 import '../services/driver_location_service.dart';
 
@@ -142,10 +143,24 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
             ? Map<String, dynamic>.from(data['address'])
             : null;
         if (address != null) {
-          final road = address['road'] ?? address['pedestrian'] ?? address['neighbourhood'] ?? address['suburb'] ?? '';
-          final city = address['city'] ?? address['town'] ?? address['village'] ?? address['county'] ?? '';
+          final road =
+              address['road'] ??
+              address['pedestrian'] ??
+              address['neighbourhood'] ??
+              address['suburb'] ??
+              '';
+          final city =
+              address['city'] ??
+              address['town'] ??
+              address['village'] ??
+              address['county'] ??
+              '';
           final state = address['state'] ?? '';
-          final parts = [road, city, state].where((s) => s.toString().trim().isNotEmpty).toList();
+          final parts = [
+            road,
+            city,
+            state,
+          ].where((s) => s.toString().trim().isNotEmpty).toList();
           if (parts.isNotEmpty) {
             return parts.join(', ');
           }
@@ -251,6 +266,6 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
 
 final driverLocationProvider =
     StateNotifierProvider<DriverLocationNotifier, DriverLocationState>((ref) {
-  final service = ref.watch(locationServiceProvider);
-  return DriverLocationNotifier(service);
-});
+      final service = ref.watch(locationServiceProvider);
+      return DriverLocationNotifier(service);
+    });
