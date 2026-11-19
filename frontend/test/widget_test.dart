@@ -6,11 +6,11 @@ void main() {
   testWidgets('App loads initial auth gatekeeper smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
-        child: LifeRouteDriverApp(),
+        child: A2IDriverApp(),
       ),
     );
 
     // Initial render shows connection or login gatekeeper
-    expect(find.byType(LifeRouteDriverApp), findsOneWidget);
+    expect(find.byType(A2IDriverApp), findsOneWidget);
   });
 }

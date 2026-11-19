@@ -120,7 +120,7 @@ class _TripMapViewState extends State<TripMapView> {
         connectTimeout: const Duration(seconds: 8),
         receiveTimeout: const Duration(seconds: 8),
         headers: {
-          if (!kIsWeb) 'User-Agent': 'LifeRouteDriver/1.0',
+          if (!kIsWeb) 'User-Agent': 'A2IDriver/1.0',
           'Accept': 'application/json',
         },
       ),
@@ -483,7 +483,7 @@ class _TripMapViewState extends State<TripMapView> {
             // Official Google Maps Roadmap tile layer (High-performance, daylight vector roads & POIs)
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.liferoute.driver',
+              userAgentPackageName: 'org.a2i.driver',
               maxZoom: 19,
               fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
             ),
@@ -649,7 +649,7 @@ class _TripMapViewState extends State<TripMapView> {
                 ),
                 SizedBox(width: 4),
                 Text(
-                  'LifeRoute Live Map',
+                  'A2I Live Map',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,

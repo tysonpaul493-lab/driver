@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// System-level local and push notification service for LifeRoute Ambulance Driver
+/// System-level local and push notification service for A2I Ambulance Driver
 class DriverNotificationService {
   DriverNotificationService._();
   static final DriverNotificationService instance = DriverNotificationService._();
@@ -16,7 +16,7 @@ class DriverNotificationService {
   static const String _dispatchChannelDesc = 'High-priority notifications for incoming emergency dispatches';
 
   static const String _systemChannelId = 'system_alerts_channel';
-  static const String _systemChannelName = 'LifeRoute System & Fleet Alerts';
+  static const String _systemChannelName = 'A2I System & Fleet Alerts';
   static const String _systemChannelDesc = 'Fleet status, shift updates, and system notifications';
 
   static const String _chatChannelId = 'patient_chat_channel';

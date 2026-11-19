@@ -44,24 +44,24 @@ void main() async {
       overrides: [
         storageServiceProvider.overrideWithValue(storage),
       ],
-      child: const LifeRouteDriverApp(),
+      child: const A2IDriverApp(),
     ),
   );
 }
 
-class LifeRouteDriverApp extends ConsumerStatefulWidget {
-  const LifeRouteDriverApp({super.key});
+class A2IDriverApp extends ConsumerStatefulWidget {
+  const A2IDriverApp({super.key});
 
   @override
-  ConsumerState<LifeRouteDriverApp> createState() => _LifeRouteDriverAppState();
+  ConsumerState<A2IDriverApp> createState() => _A2IDriverAppState();
 }
 
-class _LifeRouteDriverAppState extends ConsumerState<LifeRouteDriverApp> {
+class _A2IDriverAppState extends ConsumerState<A2IDriverApp> {
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LifeRoute Driver',
+      title: 'A2I',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.daylightTheme,
       home: const SplashScreen(),

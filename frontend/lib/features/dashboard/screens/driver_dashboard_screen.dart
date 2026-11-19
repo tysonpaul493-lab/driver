@@ -921,7 +921,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                               children: [
                                 TileLayer(
                                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.liferoute.driver',
+                                  userAgentPackageName: 'org.a2i.driver',
                                   maxZoom: 19,
                                   fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                                 ),
@@ -1040,7 +1040,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                                     ),
                                     SizedBox(width: 4),
                                     Text(
-                                      'LifeRoute Live Map',
+                                      'A2I Live Map',
                                       style: TextStyle(
                                         fontSize: 10.5,
                                         fontWeight: FontWeight.w700,

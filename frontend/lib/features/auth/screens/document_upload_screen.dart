@@ -187,7 +187,7 @@ class _DocumentUploadScreenState extends ConsumerState<DocumentUploadScreen> {
         const SnackBar(
           backgroundColor: AppColors.statusGreen,
           content: Text(
-            'Registration & documents complete! Welcome to LifeRoute Dispatch.',
+            'Registration & documents complete! Welcome to A2I Dispatch.',
             style: TextStyle(color: Colors.white),
           ),
           duration: Duration(seconds: 4),

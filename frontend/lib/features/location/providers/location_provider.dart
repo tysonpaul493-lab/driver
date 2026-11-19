@@ -123,7 +123,7 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
         BaseOptions(
           connectTimeout: const Duration(seconds: 4),
           receiveTimeout: const Duration(seconds: 4),
-          headers: {'User-Agent': 'LifeRouteEmergencyDriver/1.0'},
+          headers: {'User-Agent': 'A2IEmergencyDriver/1.0'},
         ),
       );
       final response = await dio.get(

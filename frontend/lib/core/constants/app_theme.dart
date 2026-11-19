@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_colors.dart';
 
-/// App theme configuration for LifeRoute Driver (Daylight Theme)
+/// App theme configuration for A2I Driver (Daylight Theme)
 class AppTheme {
   static ThemeData get daylightTheme {
     return ThemeData(

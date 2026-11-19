@@ -82,7 +82,7 @@ class SmsOtpService {
               isRealSmsSent: true,
               otp: otp,
               message: 'SMS verification code delivered to $tenDigitPhone.',
-              provider: 'LifeRoute SMS Gateway',
+              provider: 'A2I SMS Gateway',
             );
           }
         } catch (e) {
@@ -92,7 +92,7 @@ class SmsOtpService {
         // Alternate gateway fallback
         try {
           debugPrint('📡 [SMS Gateway] Dispatching real OTP SMS to $tenDigitPhone...');
-          final url = 'https://2factor.in/API/V1/$apiKey/SMS/$tenDigitPhone/$otp/LIFEROUTE_DRIVER_OTP';
+          final url = 'https://2factor.in/API/V1/$apiKey/SMS/$tenDigitPhone/$otp/A2I_DRIVER_OTP';
           final response = await _dio.get(url);
 
           if (response.statusCode == 200 &&
@@ -102,7 +102,7 @@ class SmsOtpService {
               isRealSmsSent: true,
               otp: otp,
               message: 'SMS verification code delivered to $tenDigitPhone.',
-              provider: 'LifeRoute SMS Gateway',
+              provider: 'A2I SMS Gateway',
             );
           }
         } catch (e) {
@@ -116,8 +116,8 @@ class SmsOtpService {
     return SmsSendResult(
       isRealSmsSent: false,
       otp: otp,
-      message: 'LifeRoute Emergency SMS dispatched to $tenDigitPhone. Code: $otp',
-      provider: 'LifeRoute Dispatch Gateway',
+      message: 'A2I Emergency SMS dispatched to $tenDigitPhone. Code: $otp',
+      provider: 'A2I Dispatch Gateway',
     );
   }
 }

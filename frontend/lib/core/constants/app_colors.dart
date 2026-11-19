@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Design tokens and curated color palette for LifeRoute Ambulance Driver (Daylight Theme)
+/// Design tokens and curated color palette for A2I Ambulance Driver (Daylight Theme)
 class AppColors {
   // Daylight Primary Brand Colors
   static const Color primaryDark = Color(0xFFF8FAFC);  // Crisp daylight background (Slate 50)
