@@ -10,42 +10,21 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+class _SplashScreenState extends State<SplashScreen> {
   Timer? _navTimer;
 
   @override
   void initState() {
     super.initState();
-
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-
-    _scaleAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutBack,
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeIn,
-    );
-
-    _animController.forward();
-
-    // After 2.4 seconds, smoothly proceed to Login Page
-    _navTimer = Timer(const Duration(milliseconds: 2400), _navigateToLogin);
+    // Smooth, prompt transition to Login Page without bouncy animation delays
+    _navTimer = Timer(const Duration(milliseconds: 1200), _navigateToLogin);
   }
 
   void _navigateToLogin() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
+        transitionDuration: const Duration(milliseconds: 400),
         pageBuilder: (context, animation, secondaryAnimation) => const AuthGatekeeper(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -57,7 +36,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _navTimer?.cancel();
-    _animController.dispose();
     super.dispose();
   }
 
@@ -82,15 +60,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             ),
 
             Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Animated Trust Official Logo Emblem
-                  ScaleTransition(
-                    scale: _scaleAnimation,
-                    child: Container(
-                      width: 130,
-                      height: 130,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Official Trust Logo Emblem - Clean Static Display (Zero Animation / Zero LifeRoute Old Badges)
+                    Container(
+                      width: 140,
+                      height: 140,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -106,70 +83,63 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       child: ClipOval(
                         child: Image.asset(
                           'assets/images/app_logo.png',
-                          width: 130,
-                          height: 130,
+                          width: 140,
+                          height: 140,
                           fit: BoxFit.cover,
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 28),
+                    const SizedBox(height: 28),
 
-                  // App Title & Tagline with Fade Animation
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 20),
-                          child: Text(
-                            'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                              height: 1.3,
-                            ),
-                          ),
+                    // App Title & Tagline with Proper Padding & Gap
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                          height: 1.3,
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'தமிழ்நாடு அவசர ஊர்தி ஓட்டுநர் கன்சோல்',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.ambulanceTeal,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 48),
-
-                        // Loading pulse
-                        SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.ambulanceTeal),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Initializing Dispatch Grid...',
-                          style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    const Text(
+                      'தமிழ்நாடு அவசர ஊர்தி ஓட்டுநர் கன்சோல்',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.ambulanceTeal,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+
+                    // Dispatch network status spinner
+                    SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.ambulanceTeal),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Initializing Dispatch Grid...',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 

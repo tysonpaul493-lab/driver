@@ -19,13 +19,18 @@ void main() async {
   final storage = SecureStorageService();
   await storage.init();
   final savedServerHost = await storage.getCustomApiUrl();
-  if (kIsWeb && savedServerHost != null && (savedServerHost.contains('localhost') || savedServerHost.contains('127.0.0.1'))) {
-    await storage.setCustomApiUrl(null);
-    ApiConstants.setServerHost(null);
-  } else {
+  if (savedServerHost != null && savedServerHost.isNotEmpty) {
     ApiConstants.setServerHost(savedServerHost);
+  } else if (kIsWeb) {
+    try {
+      final webHost = Uri.base.host.trim();
+      if (webHost.isNotEmpty && (webHost == 'localhost' || webHost == '127.0.0.1' || webHost.startsWith('192.168.'))) {
+        ApiConstants.setRuntimeFallbackHost(webHost);
+      }
+    } catch (_) {}
   }
-  if (!ApiConstants.hasCustomServerHost && !kIsWeb) {
+
+  if (!ApiConstants.hasCustomServerHost) {
     try {
       await DioClient.resolveReachableHost().timeout(
         const Duration(milliseconds: 2500),
@@ -75,23 +80,42 @@ class AuthGatekeeper extends ConsumerWidget {
     switch (authState.status) {
       case AuthStatus.loading:
       case AuthStatus.initial:
-        return const Scaffold(
+        return Scaffold(
           backgroundColor: AppColors.primaryDark,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.local_hospital_rounded,
-                  color: AppColors.ambulanceTeal,
-                  size: 56,
+                Container(
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.ambulanceTeal, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.ambulanceTeal.withValues(alpha: 0.25),
+                        blurRadius: 18,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/app_logo.png',
+                      width: 84,
+                      height: 84,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-                SizedBox(height: 20),
-                CircularProgressIndicator(
+                const SizedBox(height: 20),
+                const CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(AppColors.ambulanceTeal),
                 ),
-                SizedBox(height: 16),
-                Text(
+                const SizedBox(height: 16),
+                const Text(
                   'Connecting to Dispatch Network...',
                   style: TextStyle(
                     color: AppColors.textSecondary,

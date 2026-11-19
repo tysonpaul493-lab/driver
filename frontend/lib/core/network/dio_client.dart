@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../constants/api_constants.dart';
 import '../storage/secure_storage_service.dart';
@@ -50,12 +49,7 @@ class DioClient {
   Future<void> initFromStorage() async {
     final customUrl = await _storageService.getCustomApiUrl();
     if (customUrl != null && customUrl.isNotEmpty) {
-      if (kIsWeb && (customUrl.contains('localhost') || customUrl.contains('127.0.0.1'))) {
-        await _storageService.setCustomApiUrl(null);
-        ApiConstants.setServerHost(null);
-      } else {
-        ApiConstants.setServerHost(customUrl);
-      }
+      ApiConstants.setServerHost(customUrl);
     }
     refreshBaseUrl();
   }
@@ -70,7 +64,7 @@ class DioClient {
     String? excludeHost,
     Duration timeout = const Duration(milliseconds: 2500),
   }) async {
-    if (kIsWeb || ApiConstants.hasCustomServerHost) {
+    if (ApiConstants.hasCustomServerHost) {
       return ApiConstants.effectiveHost;
     }
 
@@ -124,7 +118,6 @@ class DioClient {
           e.error is SocketException;
 
       if (isConnectivityFailure &&
-          !kIsWeb &&
           !ApiConstants.hasCustomServerHost) {
         final failedHost = ApiConstants.effectiveHost;
         final nextHost = await resolveReachableHost(excludeHost: failedHost);
