@@ -110,7 +110,7 @@ class BookingRequestModel {
       distanceMeters: (json['distance_meters'] as num?)?.toDouble() ?? 0.0,
       estimatedEtaMinutes:
           (json['estimated_eta_minutes'] as num?)?.toInt() ?? 0,
-      countdownSeconds: (json['countdown_seconds'] as num?)?.toInt() ?? 120,
+      countdownSeconds: ((json['countdown_seconds'] as num?)?.toInt() ?? 120).clamp(15, 180),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),

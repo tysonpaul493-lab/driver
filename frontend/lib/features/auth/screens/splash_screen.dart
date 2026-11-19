@@ -85,14 +85,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated LifeRoute Emblem
+                  // Animated Trust Official Logo Emblem
                   ScaleTransition(
                     scale: _scaleAnimation,
                     child: Container(
-                      width: 110,
-                      height: 110,
+                      width: 130,
+                      height: 130,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceDark,
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.ambulanceTeal, width: 2.5),
                         boxShadow: [
@@ -103,48 +103,46 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           ),
                         ],
                       ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Cross background glow
-                          Icon(
-                            Icons.local_hospital_rounded,
-                            color: AppColors.ambulanceTeal.withValues(alpha: 0.2),
-                            size: 64,
-                          ),
-                          const Icon(
-                            Icons.local_hospital_rounded,
-                            color: AppColors.ambulanceTeal,
-                            size: 52,
-                          ),
-                        ],
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/app_logo.png',
+                          width: 130,
+                          height: 130,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
                   // App Title & Tagline with Fade Animation
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       children: [
-                        const Text(
-                          'LifeRoute Driver',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              height: 1.3,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         const Text(
-                          'Emergency Ambulance Dispatch Console',
+                          'தமிழ்நாடு அவசர ஊர்தி ஓட்டுநர் கன்சோல்',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.ambulanceTeal,
                             fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 0.3,
                           ),
                         ),

@@ -234,6 +234,7 @@ class ReverbService {
     switch (eventName) {
       case 'BookingRequested':
       case 'new-booking-request':
+      case 'NewEmergencyIncident':
         _bookingRequestController.add(data);
         break;
 

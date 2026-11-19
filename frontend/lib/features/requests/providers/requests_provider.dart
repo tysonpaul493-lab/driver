@@ -67,18 +67,17 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
   }
 
   bool _isPollingPending = false;
-  int _pollerTick = 0;
 
   void _startPendingRequestsPoller() {
     _pendingPoller?.cancel();
-    _pollerTick = 0;
     _pendingPoller = Timer.periodic(const Duration(seconds: 4), (_) async {
       final isOnline = _ref.read(onlineStatusProvider).isOnline;
       final activeTrip = _ref.read(activeTripProvider);
 
       // Busy on active trip or offline: Never show incoming request popups
       if (activeTrip.hasActiveTrip || !isOnline) {
-        if (state.currentIncomingRequest != null || state.pendingRequests.isNotEmpty) {
+        if (state.currentIncomingRequest != null ||
+            state.pendingRequests.isNotEmpty) {
           state = state.copyWith(
             pendingRequests: const [],
             clearCurrentRequest: true,
@@ -89,12 +88,10 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
 
       if (_isPollingPending) return;
 
-      // When WebSocket is connected, incoming bookings are pushed instantaneously.
-      // Poll REST API once every 12s as a safety fallback.
+      // Fast 4-second safety polling ensures driver never misses an emergency request
       final reverb = _ref.read(reverbServiceProvider);
       if (reverb.isConnected && isOnline) {
-        _pollerTick = (_pollerTick + 1) % 3;
-        if (_pollerTick != 0) return;
+        // Still poll rapidly to guarantee zero dropped requests
       }
 
       _isPollingPending = true;

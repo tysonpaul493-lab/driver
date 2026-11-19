@@ -282,52 +282,62 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
               children: [
                 const SizedBox(height: 12),
                 // Ambulance Pilot Badge Icon
+                // Trust Official Logo Brand Badge
                 Center(
                   child: Container(
-                    width: 90,
-                    height: 90,
+                    width: 96,
+                    height: 96,
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceDark,
+                      color: Colors.white,
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.ambulanceTeal, width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.ambulanceTeal.withValues(alpha: 0.2),
-                          blurRadius: 16,
+                          color: AppColors.ambulanceTeal.withValues(alpha: 0.25),
+                          blurRadius: 18,
                           spreadRadius: 2,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.local_hospital_rounded,
-                        color: AppColors.ambulanceTeal,
-                        size: 46,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/app_logo.png',
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 18),
 
                 const Center(
-                  child: Text(
-                    'LifeRoute Driver',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.3,
+                        height: 1.25,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 6),
                 const Center(
                   child: Text(
-                    'Emergency Ambulance Dispatch System',
+                    'தமிழ்நாடு அவசர ஊர்தி ஓட்டுநர் கன்சோல்',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      color: AppColors.ambulanceTeal,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),

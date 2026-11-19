@@ -352,13 +352,28 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
         titleSpacing: 12,
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 19,
-              backgroundColor: AppColors.ambulanceTeal.withValues(alpha: 0.15),
-              child: const Icon(
-                Icons.person_rounded,
-                color: AppColors.ambulanceTeal,
-                size: 20,
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.ambulanceTeal, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/app_logo.png',
+                  width: 38,
+                  height: 38,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             const SizedBox(width: 10),
