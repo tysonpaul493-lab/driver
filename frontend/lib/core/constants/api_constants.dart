@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 const String _kDefaultLiveWebBackend =
-    'https://activated-concepts-busy-syndication.trycloudflare.com/api/v1';
+    'https://jessica-western-mysterious-twiki.trycloudflare.com/api/v1';
 
 String get _detectedHost {
   if (ApiConstants.configuredApiUrl.isNotEmpty) {
@@ -296,7 +296,7 @@ class ApiConstants {
 
   // Live Dispatch WebSocket Config
   static String get reverbHost => effectiveHost.contains('trycloudflare.com')
-      ? 'realize-glucose-fired-affiliated.trycloudflare.com'
+      ? 'bacon-elegant-lead-gmt.trycloudflare.com'
       : effectiveHost;
   static int get reverbPort =>
       reverbHost.contains('trycloudflare.com') ? 443 : 8080;
