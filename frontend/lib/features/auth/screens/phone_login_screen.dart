@@ -29,12 +29,23 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
 
     if (widget.initialPhone != null && widget.initialPhone!.isNotEmpty) {
       final clean = widget.initialPhone!.replaceAll(RegExp(r'\D'), '');
-      if (clean.length >= 10) {
-        _phoneController.text = clean.substring(clean.length - 10);
-      } else {
-        _phoneController.text = clean;
+      if (!clean.contains('8428304510')) {
+        if (clean.length >= 10) {
+          _phoneController.text = clean.substring(clean.length - 10);
+        } else {
+          _phoneController.text = clean;
+        }
       }
     }
+
+    if (_phoneController.text.contains('8428304510')) {
+      _phoneController.clear();
+    }
+    _phoneController.addListener(() {
+      if (_phoneController.text.contains('8428304510')) {
+        _phoneController.clear();
+      }
+    });
   }
 
   @override
@@ -316,7 +327,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
+                      'ஆல் இந்தியா தமிழ் அன்னை அறக்கட்டளை',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textPrimary,

@@ -330,16 +330,16 @@ void main() {
         '+14155552671',
       );
       expect(
-        PhoneUtils.buildInternationalPhone('+91', '08428304510'),
-        '+918428304510',
+        PhoneUtils.buildInternationalPhone('+91', '09840010801'),
+        '+919840010801',
       );
       expect(
-        PhoneUtils.buildInternationalPhone('+91', '+91 84283 04510'),
-        '+918428304510',
+        PhoneUtils.buildInternationalPhone('+91', '+91 98400 10801'),
+        '+919840010801',
       );
       expect(
-        PhoneUtils.buildInternationalPhone('+91', '84283 04510'),
-        '+918428304510',
+        PhoneUtils.buildInternationalPhone('+91', '98400 10801'),
+        '+919840010801',
       );
     });
 
@@ -400,7 +400,7 @@ void main() {
       final repo = _FakeAuthRepository(storage);
       final notifier = AuthNotifier(repo, storage);
 
-      final unconfiguredOk = await notifier.sendOtp('8428304510');
+      final unconfiguredOk = await notifier.sendOtp('9840010801');
       expect(unconfiguredOk, isFalse);
       expect(
         notifier.state.errorMessage,
@@ -408,10 +408,10 @@ void main() {
       );
 
       repo.gatewayReady = true;
-      final sentOk = await notifier.sendOtp('8428304510');
+      final sentOk = await notifier.sendOtp('9840010801');
       expect(sentOk, isTrue);
-      expect(repo.lastSentPhone, '+918428304510');
-      expect(notifier.state.otpSentToPhone, '+918428304510');
+      expect(repo.lastSentPhone, '+919840010801');
+      expect(notifier.state.otpSentToPhone, '+919840010801');
 
       final badLengthOk = await notifier.verifyOtp('123');
       expect(badLengthOk, isFalse);
@@ -426,7 +426,7 @@ void main() {
       final validCodeOk = await notifier.verifyOtp('492817');
       expect(validCodeOk, isTrue);
       expect(notifier.state.isAuthenticated, isTrue);
-      expect(notifier.state.driver?.phone, '+918428304510');
+      expect(notifier.state.driver?.phone, '+919840010801');
     });
 
     test('9. AuthInterceptor ignores 401 on /auth/ endpoints while clearing session on protected routes', () {
@@ -785,7 +785,7 @@ void main() {
 
       // Wrong password
       final wrongOk = await notifier.loginWithPassword(
-        phone: '8428304510',
+        phone: '9840010801',
         password: 'wrong',
       );
       expect(wrongOk, isFalse);
@@ -793,7 +793,7 @@ void main() {
 
       // Correct password
       final correctOk = await notifier.loginWithPassword(
-        phone: '8428304510',
+        phone: '9840010801',
         password: 'secure123',
       );
       expect(correctOk, isTrue);
@@ -802,7 +802,7 @@ void main() {
 
       // Reset password
       final resetOk = await notifier.resetPassword(
-        phone: '8428304510',
+        phone: '9840010801',
         newPassword: 'newpassword123',
         confirmPassword: 'newpassword123',
       );

@@ -96,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
-                        'ஆல் இந்தியா தமிழ் அனைத்து அறக்கட்டளை',
+                        'ஆல் இந்தியா தமிழ் அன்னை அறக்கட்டளை',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textPrimary,

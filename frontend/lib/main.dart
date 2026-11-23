@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/constants/api_constants.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_theme.dart';
@@ -18,6 +19,22 @@ void main() async {
 
   final storage = SecureStorageService();
   await storage.init();
+
+  // Purge any legacy 8428304510 from driver storage
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in prefs.getKeys()) {
+      if (key.contains('8428304510')) {
+        await prefs.remove(key);
+      } else {
+        final val = prefs.get(key)?.toString() ?? '';
+        if (val.contains('8428304510')) {
+          await prefs.remove(key);
+        }
+      }
+    }
+  } catch (_) {}
+
   final savedServerHost = await storage.getCustomApiUrl();
   if (savedServerHost != null && savedServerHost.isNotEmpty) {
     if (savedServerHost.contains('trycloudflare.com') ||
