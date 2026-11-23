@@ -20,18 +20,18 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0F172A">
-  <meta name="description" content="LifeRoute Emergency Driver Dispatch App">
+  <meta name="description" content="A2I Emergency Driver Dispatch App">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="liferoute_driver">
+  <meta name="apple-mobile-web-app-title" content="A2I">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>liferoute_driver</title>
+  <title>A2I</title>
   <link rel="manifest" href="manifest.json">
   <script>
     // Force immediate cache invalidation so mobile browsers instantly receive new dispatch backend updates
@@ -49,25 +49,43 @@
         }
       });
     }
+  </script>
+
+  <script>
+    // Unregister legacy service workers and clear browser cache
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (var i = 0; i < names.length; i++) {
+          caches.delete(names[i]);
+        }
+      });
+    }
     try {
       for (var k in localStorage) {
         var v = localStorage.getItem(k);
-        if (typeof v === 'string' && (v.includes('localhost') || v.includes('127.0.0.1'))) {
+        if (v && (v.indexOf('trycloudflare.com') !== -1 || v.indexOf('bottle-equilibrium') !== -1 || v.indexOf('jessica-western') !== -1)) {
           localStorage.removeItem(k);
         }
       }
-    } catch (e) {}
+    } catch(e) {}
   </script>
 </head>
 <body>
   <!--
-    You can customize the "flutter_bootstrap.js" script.
+    You can customize the "flutter_bootstrap.js?v=build_1795423044446" script.
     This is useful to provide a custom configuration to the Flutter loader
     or to give the user feedback during the initialization process.
 
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=build_1795423044446" async></script>
 </body>
 </html>

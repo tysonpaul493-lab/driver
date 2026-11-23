@@ -2,8 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-const String _kDefaultLiveWebBackend =
-    'https://festival-coaches-pending-article.trycloudflare.com/api/v1';
+const String _kDefaultLiveWebBackend = 'http://localhost:8000/api/v1';
 
 String get _detectedHost {
   if (ApiConstants.configuredApiUrl.isNotEmpty) {
@@ -19,7 +18,7 @@ class ApiConstants {
   /// Can be overridden at build time via `--dart-define=DEFAULT_LAN_HOST=...` or in-app settings.
   static const String fallbackLanHost = String.fromEnvironment(
     'DEFAULT_LAN_HOST',
-    defaultValue: '192.168.0.112',
+    defaultValue: '192.168.0.106',
   );
   static const String configuredApiUrl = String.fromEnvironment(
     'DEFAULT_API_URL',
@@ -297,7 +296,7 @@ class ApiConstants {
   // Live Dispatch WebSocket Config
   static String get reverbHost => effectiveHost.contains('trycloudflare.com')
       ? 'bestsellers-hoping-ipod-keys.trycloudflare.com'
-      : effectiveHost;
+      : (effectiveHost == 'localhost' || effectiveHost == '127.0.0.1' ? '127.0.0.1' : effectiveHost);
   static int get reverbPort =>
       reverbHost.contains('trycloudflare.com') ? 443 : 8080;
   static String get reverbScheme =>

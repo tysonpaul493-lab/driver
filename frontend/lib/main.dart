@@ -20,8 +20,10 @@ void main() async {
   await storage.init();
   final savedServerHost = await storage.getCustomApiUrl();
   if (savedServerHost != null && savedServerHost.isNotEmpty) {
-    if (savedServerHost.contains('trycloudflare.com') &&
-        !savedServerHost.contains('festival-coaches-pending-article')) {
+    if (savedServerHost.contains('trycloudflare.com') ||
+        savedServerHost.contains('ngrok') ||
+        savedServerHost.contains('jessica-western') ||
+        savedServerHost.contains('bottle-equilibrium')) {
       await storage.setCustomApiUrl(null);
     } else {
       ApiConstants.setServerHost(savedServerHost);
