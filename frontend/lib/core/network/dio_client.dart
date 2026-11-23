@@ -65,7 +65,9 @@ class DioClient {
     Duration timeout = const Duration(milliseconds: 2500),
   }) async {
     if (ApiConstants.hasCustomServerHost) {
-      return ApiConstants.effectiveHost;
+      if (excludeHost == null || excludeHost != ApiConstants.effectiveHost) {
+        return ApiConstants.effectiveHost;
+      }
     }
 
     final candidates = ApiConstants.candidateHosts
@@ -117,11 +119,12 @@ class DioClient {
           e.type == DioExceptionType.sendTimeout ||
           e.error is SocketException;
 
-      if (isConnectivityFailure &&
-          !ApiConstants.hasCustomServerHost) {
+      if (isConnectivityFailure) {
         final failedHost = ApiConstants.effectiveHost;
         final nextHost = await resolveReachableHost(excludeHost: failedHost);
         if (nextHost != null && nextHost != failedHost) {
+          ApiConstants.setServerHost(null);
+          ApiConstants.setRuntimeFallbackHost(nextHost);
           refreshBaseUrl();
           onHostSwitched?.call();
           return await requestFn();

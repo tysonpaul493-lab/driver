@@ -20,8 +20,14 @@ void main() async {
   await storage.init();
   final savedServerHost = await storage.getCustomApiUrl();
   if (savedServerHost != null && savedServerHost.isNotEmpty) {
-    ApiConstants.setServerHost(savedServerHost);
-  } else if (kIsWeb) {
+    if (savedServerHost.contains('trycloudflare.com') &&
+        !savedServerHost.contains('festival-coaches-pending-article')) {
+      await storage.setCustomApiUrl(null);
+    } else {
+      ApiConstants.setServerHost(savedServerHost);
+    }
+  }
+  if (!ApiConstants.hasCustomServerHost && kIsWeb) {
     try {
       final webHost = Uri.base.host.trim();
       if (webHost.isNotEmpty && (webHost == 'localhost' || webHost == '127.0.0.1' || webHost.startsWith('192.168.'))) {
