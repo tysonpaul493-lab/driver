@@ -38,8 +38,9 @@ class ReverbService {
   bool get isConnected => _isConnected;
 
   String _buildWsUrl() {
+    final isSecureWeb = kIsWeb && Uri.base.scheme == 'https';
     final useTls = ApiConstants.reverbScheme == 'https' ||
-        kIsWeb ||
+        isSecureWeb ||
         ApiConstants.reverbHost.contains('trycloudflare.com') ||
         ApiConstants.reverbPort == 443;
     final scheme = useTls ? 'wss' : 'ws';
