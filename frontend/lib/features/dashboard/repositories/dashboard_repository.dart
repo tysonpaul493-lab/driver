@@ -20,7 +20,7 @@ class DashboardRepository {
     });
     final localEarnings = completedTrips.fold<double>(
       0.0,
-      (acc, t) => acc + ((t['earnings'] as num?)?.toDouble() ?? 650.0),
+      (acc, t) => acc + ((t['earnings'] as num?)?.toDouble() ?? 0.0),
     );
     final localCritical = completedTrips.where((t) {
       final cat = (t['emergency_category'] ?? '').toString().toLowerCase();
@@ -40,11 +40,11 @@ class DashboardRepository {
       );
     } catch (_) {
       return DashboardSummaryModel(
-        completedTripsToday: 3 + localCount,
-        distanceCoveredKm: 34.8 + localDistance,
-        onlineHours: 4.5 + (localCount * 0.4),
-        earningsToday: 1850.0 + localEarnings,
-        emergencyCriticalTrips: 2 + localCritical,
+        completedTripsToday: localCount,
+        distanceCoveredKm: localDistance,
+        onlineHours: localCount > 0 ? (localCount * 0.4) : 0.0,
+        earningsToday: localEarnings,
+        emergencyCriticalTrips: localCritical,
       );
     }
   }

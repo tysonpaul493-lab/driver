@@ -240,9 +240,9 @@ class ApiConstants {
     }
     if (kIsWeb) {
       try {
-        final webHost = Uri.base.host.trim();
-        if (webHost.isNotEmpty && (webHost == 'localhost' || webHost == '127.0.0.1' || webHost.startsWith('192.168.'))) {
-          return 'http://$webHost:8000/api/v1';
+        final origin = Uri.base.origin.trim();
+        if (origin.isNotEmpty && !origin.startsWith('file:') && origin != 'null') {
+          return '$origin/api/v1';
         }
       } catch (_) {}
     }
@@ -294,13 +294,19 @@ class ApiConstants {
   static const String supportHelpline = '/driver/support/info';
 
   // Live Dispatch WebSocket Config
-  static String get reverbHost => effectiveHost.contains('trycloudflare.com')
-      ? 'bestsellers-hoping-ipod-keys.trycloudflare.com'
-      : (effectiveHost == 'localhost' || effectiveHost == '127.0.0.1' ? '127.0.0.1' : effectiveHost);
-  static int get reverbPort =>
-      reverbHost.contains('trycloudflare.com') ? 443 : 8080;
-  static String get reverbScheme =>
-      reverbHost.contains('trycloudflare.com') ? 'https' : 'http';
+  static String get reverbHost {
+    if (kIsWeb) {
+      try {
+        final host = Uri.base.host.trim();
+        if (host.isNotEmpty && !host.contains('trycloudflare.com')) {
+          return host;
+        }
+      } catch (_) {}
+    }
+    return effectiveHost == 'localhost' || effectiveHost == '127.0.0.1' ? '127.0.0.1' : effectiveHost;
+  }
+  static int get reverbPort => 8080;
+  static String get reverbScheme => 'http';
   static const String reverbAppKey = 'liferoute_reverb_key';
   static const String reverbAuthEndpoint = '/broadcasting/auth';
 

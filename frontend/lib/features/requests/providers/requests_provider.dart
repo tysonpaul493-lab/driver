@@ -272,9 +272,9 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
     });
   }
 
-  /// Simulate incoming booking for manual testing or demo dispatch
-  void simulateIncomingRequest(BookingRequestModel request) {
-    AudioAlertService.playDispatchAlert();
+  /// Process incoming verified dispatch booking request
+  void handleIncomingBookingRequest(BookingRequestModel request) {
+    if (_declinedBookingIds.contains(request.id)) return;
     state = state.copyWith(
       currentIncomingRequest: request,
       conflictMessage: null,

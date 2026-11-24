@@ -85,15 +85,13 @@ class TripHistoryItem {
   factory TripHistoryItem.fromJson(Map<String, dynamic> json) {
     final distKmVal = (json['distance_km'] as num?)?.toDouble();
     final distMetersVal = (json['distance_remaining_meters'] as num?)?.toDouble();
-    final calcDistKm = distKmVal ?? (distMetersVal != null && distMetersVal > 0 ? (distMetersVal / 1000.0) : 6.8);
+    final calcDistKm = distKmVal ?? (distMetersVal != null && distMetersVal > 0 ? (distMetersVal / 1000.0) : 0.0);
 
     final durVal = (json['duration_minutes'] as num?)?.toInt();
-    final calcDur = (durVal != null && durVal >= 5 && durVal <= 180)
-        ? durVal
-        : (calcDistKm * 2.4).round().clamp(10, 60);
+    final calcDur = durVal ?? 0;
 
     final earnVal = (json['earnings'] as num?)?.toDouble();
-    final calcEarn = earnVal ?? (250.0 + (calcDistKm * 28.0));
+    final calcEarn = earnVal ?? 0.0;
 
     final completedStr = json['completed_at'] ?? json['updated_at'] ?? json['accepted_at'] ?? json['created_at'];
     DateTime date = DateTime.now();

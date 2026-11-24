@@ -26,26 +26,15 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _phoneController.clear();
+    _passwordController.clear();
 
     if (widget.initialPhone != null && widget.initialPhone!.isNotEmpty) {
       final clean = widget.initialPhone!.replaceAll(RegExp(r'\D'), '');
-      if (!clean.contains('8428304510')) {
-        if (clean.length >= 10) {
-          _phoneController.text = clean.substring(clean.length - 10);
-        } else {
-          _phoneController.text = clean;
-        }
+      if (clean.length >= 10) {
+        _phoneController.text = clean.substring(clean.length - 10);
       }
     }
-
-    if (_phoneController.text.contains('8428304510')) {
-      _phoneController.clear();
-    }
-    _phoneController.addListener(() {
-      if (_phoneController.text.contains('8428304510')) {
-        _phoneController.clear();
-      }
-    });
   }
 
   @override

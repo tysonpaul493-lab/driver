@@ -609,7 +609,7 @@ void main() {
       addTearDown(container.dispose);
 
       final notifier = container.read(requestsProvider.notifier);
-      notifier.simulateIncomingRequest(parsed);
+      notifier.handleIncomingBookingRequest(parsed);
       expect(container.read(requestsProvider).currentIncomingRequest?.id, 707);
 
       await notifier.declineRequest(707, reason: 'Busy');
@@ -764,7 +764,7 @@ void main() {
         'distance_meters': 1400.0,
       });
 
-      notifier.simulateIncomingRequest(sample);
+      notifier.handleIncomingBookingRequest(sample);
       expect(container.read(requestsProvider).currentIncomingRequest?.id, 77);
 
       // Attempting to accept a booking that another driver already accepted

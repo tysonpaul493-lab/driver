@@ -473,105 +473,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } on ApiException catch (e) {
-      if (e.isNetworkError) {
-        return _fallbackRegister(
-          name: name,
-          phone: phone,
-          email: email,
-          emergencyContact: emergencyContact,
-          licenseNumber: licenseNumber,
-          licenseExpiryDate: licenseExpiryDate,
-          ambulanceRegNumber: ambulanceRegNumber,
-          vehicleType: vehicleType,
-          makeModel: makeModel,
-          year: year,
-          equipmentList: equipmentList,
-          operatorAffiliation: operatorAffiliation,
-          permitNumber: permitNumber,
-          permitExpiryDate: permitExpiryDate,
-          insurancePolicyNumber: insurancePolicyNumber,
-          insuranceExpiryDate: insuranceExpiryDate,
-        );
-      }
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: e.firstErrorMessage,
       );
       return false;
-    } catch (_) {
-      return _fallbackRegister(
-        name: name,
-        phone: phone,
-        email: email,
-        emergencyContact: emergencyContact,
-        licenseNumber: licenseNumber,
-        licenseExpiryDate: licenseExpiryDate,
-        ambulanceRegNumber: ambulanceRegNumber,
-        vehicleType: vehicleType,
-        makeModel: makeModel,
-        year: year,
-        equipmentList: equipmentList,
-        operatorAffiliation: operatorAffiliation,
-        permitNumber: permitNumber,
-        permitExpiryDate: permitExpiryDate,
-        insurancePolicyNumber: insurancePolicyNumber,
-        insuranceExpiryDate: insuranceExpiryDate,
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Unable to reach dispatch server. Please check your connection.',
       );
+      return false;
     }
-  }
-
-  Future<bool> _fallbackRegister({
-    required String name,
-    required String phone,
-    required String email,
-    required String emergencyContact,
-    required String licenseNumber,
-    required String licenseExpiryDate,
-    required String ambulanceRegNumber,
-    required String vehicleType,
-    required String makeModel,
-    required int year,
-    required List<String> equipmentList,
-    required String operatorAffiliation,
-    required String permitNumber,
-    required String permitExpiryDate,
-    required String insurancePolicyNumber,
-    required String insuranceExpiryDate,
-  }) async {
-    final fallbackDriver = DriverModel(
-      id: DateTime.now().millisecondsSinceEpoch % 100000,
-      name: name,
-      phone: phone,
-      email: email,
-      emergencyContact: emergencyContact,
-      licenseNumber: licenseNumber,
-      licenseExpiryDate: licenseExpiryDate,
-      verificationStatus: VerificationStatus.approved,
-      documentsUploaded: const {},
-      assignedVehicle: VehicleModel(
-        id: DateTime.now().millisecondsSinceEpoch % 100000,
-        registrationNumber: ambulanceRegNumber,
-        vehicleType: VehicleType.fromString(vehicleType),
-        makeModel: makeModel,
-        year: year,
-        equipmentList: equipmentList,
-        operatorAffiliation: operatorAffiliation,
-        permitNumber: permitNumber,
-        permitExpiryDate: permitExpiryDate,
-        insurancePolicyNumber: insurancePolicyNumber,
-        insuranceExpiryDate: insuranceExpiryDate,
-        isEligible: true,
-      ),
-    );
-    await _storage.saveDriverProfile(fallbackDriver.toJson());
-    await _storage.saveDriverId(fallbackDriver.id);
-    await _storage.saveRegisteredDriverByPhone(phone, fallbackDriver.toJson());
-    state = state.copyWith(
-      status: AuthStatus.unauthenticated,
-      driver: fallbackDriver,
-      errorMessage: null,
-    );
-    return true;
   }
 
   Future<void> _markDocumentUploadedLocally(String docType) async {

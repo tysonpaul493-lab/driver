@@ -289,37 +289,6 @@ class ActiveTripNotifier extends StateNotifier<ActiveTripState> {
     }
   }
 
-  /// Start a simulated emergency dispatch trip using dynamic coordinates and distance
-  void startDemoTrip() {
-    final location = _ref.read(driverLocationProvider);
-    final currentLat = location.latitude ?? 12.9716;
-    final currentLng = location.longitude ?? 77.5946;
-    final demoTrip = TripModel(
-      id: DateTime.now().millisecondsSinceEpoch % 10000,
-      bookingReference: 'BK-${DateTime.now().millisecondsSinceEpoch % 90000 + 10000}',
-      status: TripStatus.accepted,
-      pickupAddress: 'Nearby Emergency Pickup',
-      pickupLandmark: '',
-      pickupLatitude: currentLat + 0.008,
-      pickupLongitude: currentLng + 0.007,
-      destinationHospital: 'Emergency & Trauma Centre',
-      destinationAddress: 'Casualty & Emergency Bay',
-      destinationLatitude: currentLat + 0.018,
-      destinationLongitude: currentLng + 0.015,
-      emergencyCategory: 'Critical',
-      emergencyNotes: 'Oxygen & vital monitoring required.',
-      specialAccessInstructions: 'Enter via Emergency Ambulance Bay.',
-      patientName: '',
-      contactNumber: '',
-      distanceRemainingMeters: 0.0,
-      acceptedAt: DateTime.now(),
-    );
-    setTrip(demoTrip);
-    _ref.read(driverLocationProvider.notifier).startTracking(
-          bookingReference: demoTrip.bookingReference,
-        );
-  }
-
   void _subscribeToTripEvents(int tripId) {
     final reverb = _ref.read(reverbServiceProvider);
     reverb.subscribeToBookingChannel(tripId);
