@@ -80,13 +80,15 @@ class OnlineStatusNotifier extends StateNotifier<OnlineStatusState> {
     state = state.copyWith(isOnline: isOnline);
     if (isOnline && driver != null && driver.verificationStatus.isApproved) {
       final loc = _ref.read(driverLocationProvider);
-      try {
-        await _repository.toggleOnlineStatus(
-          true,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-        );
-      } catch (_) {}
+      if (loc.latitude != null && loc.longitude != null && (loc.latitude != 0.0 || loc.longitude != 0.0)) {
+        try {
+          await _repository.toggleOnlineStatus(
+            true,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+          );
+        } catch (_) {}
+      }
     }
     await _ensureActiveServicesIfOnline();
   }

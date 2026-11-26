@@ -22,15 +22,15 @@ class DriverLocationState {
   final String currentAddress;
 
   const DriverLocationState({
-    this.latitude = 12.9716, // India Standard (Bengaluru Center)
-    this.longitude = 77.5946,
-    this.accuracy = 5.0,
+    this.latitude = 0.0,
+    this.longitude = 0.0,
+    this.accuracy = 0.0,
     this.heading = 0.0,
     this.speed = 0.0,
     this.isGpsStale = false,
     this.isTracking = false,
     this.lastUpdated,
-    this.currentAddress = 'MG Road, Central Emergency Zone, Bengaluru',
+    this.currentAddress = '',
   });
 
   DriverLocationState copyWith({
@@ -71,50 +71,10 @@ class DriverLocationNotifier extends StateNotifier<DriverLocationState> {
   }
 
   static String resolveIndianAddress(double lat, double lng) {
-    // Karnataka / Bengaluru Sector
-    if (lat >= 12.75 && lat <= 13.30 && lng >= 77.35 && lng <= 77.85) {
-      if (lat >= 12.96 && lat <= 13.00 && lng >= 77.58 && lng <= 77.64) {
-        return 'MG Road & Brigade Junction, Central Bengaluru, Karnataka';
-      } else if (lat < 12.94) {
-        return 'Electronic City Phase 1, Bengaluru, Karnataka';
-      } else if (lat > 13.02) {
-        return 'Hebbal Flyover & Bellary Road, Bengaluru, Karnataka';
-      } else if (lng < 77.56) {
-        return 'Malleshwaram 8th Cross, Bengaluru, Karnataka';
-      } else {
-        return 'Indiranagar 100ft Road, Bengaluru, Karnataka';
-      }
+    if (lat == 0.0 && lng == 0.0) {
+      return 'Acquiring live GPS fix...';
     }
-    // Tamil Nadu / Coimbatore Sector
-    else if (lat >= 10.75 && lat <= 11.35 && lng >= 76.75 && lng <= 77.25) {
-      if (lat >= 10.98 && lat <= 11.05 && lng >= 76.92 && lng <= 77.02) {
-        return 'Gandhipuram Cross Cut Road, Coimbatore, Tamil Nadu';
-      } else if (lat > 11.02) {
-        return 'Saravanampatti & IT Corridor, Coimbatore, Tamil Nadu';
-      } else {
-        return 'Avinashi Road & Peelamedu, Coimbatore, Tamil Nadu';
-      }
-    }
-    // Tamil Nadu / Chennai Sector
-    else if (lat >= 12.80 && lat <= 13.25 && lng >= 80.10 && lng <= 80.35) {
-      return 'Anna Salai & T. Nagar, Chennai, Tamil Nadu';
-    }
-    // Telangana / Hyderabad Sector
-    else if (lat >= 17.25 && lat <= 17.55 && lng >= 78.30 && lng <= 78.60) {
-      return 'Banjara Hills Road #12, Hyderabad, Telangana';
-    }
-    // Maharashtra / Mumbai Sector
-    else if (lat >= 18.85 && lat <= 19.30 && lng >= 72.75 && lng <= 73.05) {
-      return 'Bandra Kurla Complex (BKC), Mumbai, Maharashtra';
-    }
-    // National Capital Region / Delhi
-    else if (lat >= 28.40 && lat <= 28.90 && lng >= 76.90 && lng <= 77.40) {
-      return 'Connaught Place & Outer Ring Road, New Delhi';
-    }
-    // General Regional India Dispatch Address
-    else {
-      return 'District Emergency Medical Corridor, India';
-    }
+    return 'GPS (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})';
   }
 
   /// Reverse geocode coordinates using live OpenStreetMap Nominatim with local fallback

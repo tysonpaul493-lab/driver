@@ -899,11 +899,15 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                               FlutterMap(
                                 mapController: _mapController,
                                 options: MapOptions(
-                                  initialCenter: ll.LatLng(
-                                    locationState.latitude ?? 12.9716,
-                                    locationState.longitude ?? 77.5946,
-                                  ),
-                                  initialZoom: 15.5,
+                                  initialCenter: ((locationState.latitude ?? 0.0) != 0.0 || (locationState.longitude ?? 0.0) != 0.0)
+                                      ? ll.LatLng(
+                                          locationState.latitude!,
+                                          locationState.longitude!,
+                                        )
+                                      : const ll.LatLng(20.5937, 78.9629),
+                                  initialZoom: ((locationState.latitude ?? 0.0) != 0.0 || (locationState.longitude ?? 0.0) != 0.0)
+                                      ? 15.5
+                                      : 4.2,
                                   initialRotation: _mapRotationNotifier.value,
                                   interactionOptions: const InteractionOptions(
                                     flags: InteractiveFlag.all,
@@ -918,38 +922,40 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                                     }
                                   },
                                 ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'org.a2i.driver',
-                                  maxZoom: 19,
-                                  fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                                ),
-                                CircleLayer(
-                                  circles: [
-                                    CircleMarker(
-                                      point: ll.LatLng(
-                                        locationState.latitude ?? 12.9716,
-                                        locationState.longitude ?? 77.5946,
-                                      ),
-                                      radius: locationState.accuracy.clamp(
-                                        12.0,
-                                        45.0,
-                                      ),
-                                      useRadiusInMeter: false,
-                                      color: const Color(0x224285F4),
-                                      borderColor: const Color(0xFF4285F4),
-                                      borderStrokeWidth: 1.5,
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    userAgentPackageName: 'org.a2i.driver',
+                                    maxZoom: 19,
+                                    fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                                  ),
+                                  if ((locationState.latitude ?? 0.0) != 0.0 || (locationState.longitude ?? 0.0) != 0.0)
+                                    CircleLayer(
+                                      circles: [
+                                        CircleMarker(
+                                          point: ll.LatLng(
+                                            locationState.latitude!,
+                                            locationState.longitude!,
+                                          ),
+                                          radius: locationState.accuracy.clamp(
+                                            12.0,
+                                            45.0,
+                                          ),
+                                          useRadiusInMeter: false,
+                                          color: const Color(0x224285F4),
+                                          borderColor: const Color(0xFF4285F4),
+                                          borderStrokeWidth: 1.5,
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      point: ll.LatLng(
-                                        locationState.latitude ?? 12.9716,
-                                        locationState.longitude ?? 77.5946,
-                                      ),
+                                  if ((locationState.latitude ?? 0.0) != 0.0 || (locationState.longitude ?? 0.0) != 0.0)
+                                    MarkerLayer(
+                                      markers: [
+                                        Marker(
+                                          point: ll.LatLng(
+                                            locationState.latitude!,
+                                            locationState.longitude!,
+                                          ),
                                       width: 68,
                                       height: 68,
                                       child: Stack(

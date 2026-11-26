@@ -41,7 +41,7 @@ class BookingRequestModel {
   });
 
   factory BookingRequestModel.fromJson(Map<String, dynamic> json) {
-    String destHospital = 'Emergency Trauma Center';
+    String destHospital = '';
     if (json['destination_hospital'] is String &&
         (json['destination_hospital'] as String).isNotEmpty) {
       destHospital = json['destination_hospital'];
@@ -57,11 +57,11 @@ class BookingRequestModel {
     final pickupLat =
         (json['pickup_latitude'] as num?)?.toDouble() ??
         (json['pickup_lat'] as num?)?.toDouble() ??
-        12.9716;
+        0.0;
     final pickupLng =
         (json['pickup_longitude'] as num?)?.toDouble() ??
         (json['pickup_lng'] as num?)?.toDouble() ??
-        77.5946;
+        0.0;
 
     final destLat =
         (json['destination_latitude'] as num?)?.toDouble() ??
@@ -70,7 +70,7 @@ class BookingRequestModel {
             ? (json['destination_hospital']['lat'] as num?)?.toDouble() ??
                   (json['destination_hospital']['latitude'] as num?)?.toDouble()
             : null) ??
-        (pickupLat + 0.015);
+        0.0;
 
     final destLng =
         (json['destination_longitude'] as num?)?.toDouble() ??
@@ -80,14 +80,14 @@ class BookingRequestModel {
                   (json['destination_hospital']['longitude'] as num?)
                       ?.toDouble()
             : null) ??
-        (pickupLng + 0.012);
+        0.0;
 
     final destAddress =
         (json['destination_address'] as String?) ??
         (json['destination_hospital'] is Map
             ? json['destination_hospital']['address']?.toString()
             : null) ??
-        'Casualty & Emergency Bay';
+        '';
 
     return BookingRequestModel(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 101,

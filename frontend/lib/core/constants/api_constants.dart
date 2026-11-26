@@ -254,9 +254,9 @@ class ApiConstants {
   static const String nationalDisasterHelpline = '112';
   static const String indiaDefaultCountryCode = '+91';
 
-  // Standard Indian Initial Coordinates (Bengaluru / New Delhi)
-  static const double defaultIndiaLat = 12.9716;
-  static const double defaultIndiaLng = 77.5946;
+  // Unset Initial Coordinates (Requires live GPS telemetry)
+  static const double defaultIndiaLat = 0.0;
+  static const double defaultIndiaLng = 0.0;
 
   // Auth endpoints
   static const String checkPhone = '/driver/auth/check-phone';

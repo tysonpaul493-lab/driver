@@ -255,37 +255,12 @@ class ActiveTripNotifier extends StateNotifier<ActiveTripState> {
         );
       }
       return true;
-    } catch (_) {
-      // Offline fallback: update local trip model cleanly without losing real patient/hospital info
-      final now = DateTime.now();
-      final updated = currentTrip.copyWith(
-        status: next,
-        arrivedPickupAt: next == TripStatus.arrivedAtPickup ? now : currentTrip.arrivedPickupAt,
-        patientPickedUpAt: next == TripStatus.patientOnboard ? now : currentTrip.patientPickedUpAt,
-        completedAt: next == TripStatus.completed ? now : currentTrip.completedAt,
-        handoverNotes: handoverNotes ?? currentTrip.handoverNotes,
-      );
-      await AudioAlertService.playActionConfirmed();
-      if (next.isFinished) {
-        final storage = _ref.read(storageServiceProvider);
-        await storage.setActiveBookingId(null);
-        await storage.saveCompletedTrip(updated.toJson());
-        await _ref.read(driverLocationProvider.notifier).stopTracking();
-        try {
-          await _ref.read(reverbServiceProvider).unsubscribeBookingChannel();
-        } catch (_) {}
-
-        _ref.invalidate(dashboardSummaryProvider);
-        _ref.invalidate(tripHistoryProvider);
-      }
+    } catch (e) {
       state = state.copyWith(
-        trip: updated,
         isLoading: false,
-        lastActionMessage: next.isFinished
-            ? 'Emergency trip successfully completed.'
-            : 'Step updated to: ${next.displayTitle}',
+        errorMessage: 'Unable to sync trip update with dispatch server: $e',
       );
-      return true;
+      return false;
     }
   }
 

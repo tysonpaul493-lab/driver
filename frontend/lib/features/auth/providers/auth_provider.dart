@@ -148,24 +148,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Direct 1-Tap Sign In for already registered ambulance pilot without repeating registration
+  /// Direct sign-in using existing verified session token for registered driver
   Future<bool> loginAsRegisteredDriver(DriverModel registeredDriver) async {
+    final existingToken = await _storage.getAuthToken();
+    if (existingToken == null || existingToken.isEmpty || existingToken.startsWith('token_')) {
+      state = state.copyWith(
+        isSubmitting: false,
+        errorMessage: 'Valid server authentication session required.',
+      );
+      return false;
+    }
     state = state.copyWith(isSubmitting: true, errorMessage: null);
-    await _storage.saveAuthToken(
-      'token_${DateTime.now().millisecondsSinceEpoch}',
-    );
     await _storage.saveDriverId(registeredDriver.id);
     await _storage.saveDriverProfile(registeredDriver.toJson());
     await _storage.saveRegisteredDriverByPhone(
       registeredDriver.phone,
       registeredDriver.toJson(),
     );
-    await _storage.setOnlineStatus(true);
-    _resolveDriverState(
-      registeredDriver.copyWith(
-        verificationStatus: VerificationStatus.approved,
-      ),
-    );
+    _resolveDriverState(registeredDriver);
     return true;
   }
 
