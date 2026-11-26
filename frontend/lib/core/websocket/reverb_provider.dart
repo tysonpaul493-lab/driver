@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../features/auth/providers/auth_provider.dart';
 import 'reverb_service.dart';
 
 final reverbServiceProvider = Provider<ReverbService>((ref) {
-  final service = ReverbService();
+  final storage = ref.watch(storageServiceProvider);
+  final service = ReverbService(tokenReader: () => storage.getAuthToken());
 
   ref.onDispose(() {
     service.dispose();

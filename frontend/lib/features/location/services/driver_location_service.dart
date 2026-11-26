@@ -136,11 +136,27 @@ class DriverLocationService {
     await stopTracking(); // Stop prior tracking before setting active booking reference
     _activeBookingReference = bookingReference;
 
-    // High accuracy, 3m movement filter + periodic heartbeat so stationary phones still update live
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 3,
-    );
+    // High accuracy, 3m movement filter with Android Foreground Service notification for locked-screen/background GPS
+    final LocationSettings locationSettings =
+        (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+            ? AndroidSettings(
+                accuracy: LocationAccuracy.high,
+                distanceFilter: 3,
+                intervalDuration: const Duration(seconds: 4),
+                foregroundNotificationConfig: const ForegroundNotificationConfig(
+                  notificationTitle: 'LifeRoute Driver Online',
+                  notificationText:
+                      'Live ambulance GPS tracking & emergency dispatch active.',
+                  notificationChannelName: 'Ambulance Live GPS Tracking',
+                  enableWifiLock: true,
+                  enableWakeLock: true,
+                  setOngoing: true,
+                ),
+              )
+            : const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                distanceFilter: 3,
+              );
 
     _resetStaleTimer();
 

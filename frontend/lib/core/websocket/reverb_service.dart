@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/api_constants.dart';
 
 /// Real-time WebSocket service (Reverb / Pusher JSON protocol) for dispatch and trip updates
 class ReverbService {
+  final Future<String?> Function()? _tokenReader;
   bool _isConnected = false;
   int? _subscribedDriverId;
   String? _subscribedBookingChannel;
   String? _activeWsUrl;
+  String? _socketId;
   WebSocketChannel? _directChannel;
   StreamSubscription<dynamic>? _directSubscription;
   Timer? _reconnectTimer;
@@ -24,7 +27,8 @@ class ReverbService {
   final _chatMessageController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionStateController = StreamController<bool>.broadcast();
 
-  ReverbService();
+  ReverbService({Future<String?> Function()? tokenReader})
+      : _tokenReader = tokenReader;
 
   // Stream getters
   Stream<Map<String, dynamic>> get onBookingRequest => _bookingRequestController.stream;
@@ -38,6 +42,9 @@ class ReverbService {
   bool get isConnected => _isConnected;
 
   String _buildWsUrl() {
+    if (ApiConstants.configuredWsUrl.isNotEmpty) {
+      return ApiConstants.configuredWsUrl;
+    }
     final isSecureWeb = kIsWeb && Uri.base.scheme == 'https';
     final useTls = ApiConstants.reverbScheme == 'https' ||
         isSecureWeb ||
@@ -46,10 +53,11 @@ class ReverbService {
     final scheme = useTls ? 'wss' : 'ws';
     final host = ApiConstants.reverbHost;
     final port = ApiConstants.reverbPort;
-    if (useTls && (port == 443 || port == 80)) {
-      return '$scheme://$host';
+    final path = '/app/${ApiConstants.reverbAppKey}';
+    if ((useTls && (port == 443 || port == 80)) || (!useTls && port == 80)) {
+      return '$scheme://$host$path';
     }
-    return '$scheme://$host:$port';
+    return '$scheme://$host:$port$path';
   }
 
   /// Connect to WebSocket server across both Web and Mobile
@@ -117,23 +125,12 @@ class ReverbService {
         }
       });
 
-      // Subscribe to driver channel and broadcast channel
-      final driverChannel = ApiConstants.driverPrivateChannel(driverId);
-      channel.sink.add(jsonEncode({
-        'event': 'pusher:subscribe',
-        'data': {'channel': driverChannel},
-      }));
+      // Subscribe to public dispatch broadcast immediately; authorize private channels after handshake
+      _socketId = null;
       channel.sink.add(jsonEncode({
         'event': 'pusher:subscribe',
         'data': {'channel': ApiConstants.emergencyBroadcastChannel},
       }));
-
-      if (_subscribedBookingChannel != null) {
-        channel.sink.add(jsonEncode({
-          'event': 'pusher:subscribe',
-          'data': {'channel': _subscribedBookingChannel},
-        }));
-      }
 
       _directSubscription = channel.stream.listen(
         (data) {
@@ -147,6 +144,17 @@ class ReverbService {
               try {
                 eventData = jsonDecode(eventData);
               } catch (_) {}
+            }
+            if (eventName == 'pusher:connection_established' && eventData is Map) {
+              final sid = eventData['socket_id']?.toString();
+              if (sid != null && sid.isNotEmpty) {
+                _socketId = sid;
+                _authorizeAndSubscribePrivate(channel, ApiConstants.driverPrivateChannel(driverId));
+                if (_subscribedBookingChannel != null) {
+                  _authorizeAndSubscribePrivate(channel, _subscribedBookingChannel!);
+                }
+              }
+              return;
             }
             if (eventData is Map) {
               _routeEvent(eventName, Map<String, dynamic>.from(eventData));
@@ -193,16 +201,54 @@ class ReverbService {
     });
   }
 
+  Future<void> _authorizeAndSubscribePrivate(
+    WebSocketChannel channel,
+    String channelName,
+  ) async {
+    if (!identical(_directChannel, channel)) return;
+    final sid = _socketId;
+    if (sid == null || sid.isEmpty) return;
+
+    final token = _tokenReader != null ? await _tokenReader() : null;
+    if (token == null || token.isEmpty) return;
+
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 6),
+      receiveTimeout: const Duration(seconds: 6),
+    ));
+    try {
+      final resp = await dio.post(
+        '${ApiConstants.defaultBaseUrl}/broadcasting/auth',
+        data: {'channel_name': channelName, 'socket_id': sid},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final auth = (resp.data is Map) ? resp.data['auth']?.toString() : null;
+      if (auth != null && auth.isNotEmpty && identical(_directChannel, channel)) {
+        channel.sink.add(jsonEncode({
+          'event': 'pusher:subscribe',
+          'data': {
+            'channel': channelName,
+            'auth': auth,
+            if (resp.data['channel_data'] != null)
+              'channel_data': resp.data['channel_data'],
+          },
+        }));
+      }
+    } catch (e) {
+      debugPrint('⚠️ [ReverbService] Private channel auth failed for $channelName: $e');
+    } finally {
+      dio.close();
+    }
+  }
+
   /// Subscribe to driver-specific private channel for incoming booking requests
   Future<void> subscribeToDriverChannel(int driverId) async {
     _subscribedDriverId = driverId;
     final channelName = ApiConstants.driverPrivateChannel(driverId);
-    try {
-      _directChannel?.sink.add(jsonEncode({
-        'event': 'pusher:subscribe',
-        'data': {'channel': channelName},
-      }));
-    } catch (_) {}
+    final ch = _directChannel;
+    if (ch != null && _socketId != null) {
+      await _authorizeAndSubscribePrivate(ch, channelName);
+    }
   }
 
   /// Subscribe to active booking channel for trip changes (e.g. cancellation, hospital change)
@@ -210,12 +256,10 @@ class ReverbService {
     await unsubscribeBookingChannel();
     final channelName = ApiConstants.bookingPrivateChannel(bookingId);
     _subscribedBookingChannel = channelName;
-    try {
-      _directChannel?.sink.add(jsonEncode({
-        'event': 'pusher:subscribe',
-        'data': {'channel': channelName},
-      }));
-    } catch (_) {}
+    final ch = _directChannel;
+    if (ch != null && _socketId != null) {
+      await _authorizeAndSubscribePrivate(ch, channelName);
+    }
   }
 
   /// Unsubscribe active booking channel when trip completes or cancels
