@@ -30,3 +30,9 @@ frontend/.flutter-plugins-dependencies
 frontend/.packages
 frontend/.pub/
 frontend/build/
+frontend/android/key.properties
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
