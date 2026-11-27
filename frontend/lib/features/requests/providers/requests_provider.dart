@@ -284,6 +284,7 @@ class RequestsNotifier extends StateNotifier<RequestsState> {
 
   /// Accept an emergency request (protecting against race conditions)
   Future<bool> acceptRequest(int bookingId) async {
+    if (state.isAccepting) return false;
     state = state.copyWith(
       isAccepting: true,
       errorMessage: null,

@@ -464,13 +464,17 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
         trip.status == TripStatus.arrivedAtHospital ||
         trip.status.isFinished;
 
+    final bool hasValidDriverGps =
+        locationState.latitude != null &&
+        locationState.longitude != null &&
+        (locationState.latitude! != 0.0 || locationState.longitude! != 0.0);
+
     // Calculate phase-aware live road distance (OSRM road meters when available, else Haversine driving estimate)
     double distanceMeters = 0.0;
     if (!isAtStop) {
       if (_liveRoadDistanceMeters != null && _liveRoadDistanceMeters! > 0) {
         distanceMeters = _liveRoadDistanceMeters!;
-      } else if (locationState.latitude != null &&
-          locationState.longitude != null) {
+      } else if (hasValidDriverGps) {
         distanceMeters = DistanceUtils.calculateDrivingDistanceMeters(
           locationState.latitude!,
           locationState.longitude!,
@@ -554,9 +558,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
           Expanded(
             flex: 4,
             child: TripMapView(
-              currentLat: locationState.latitude ?? trip.pickupLatitude - 0.015,
-              currentLng:
-                  locationState.longitude ?? trip.pickupLongitude - 0.015,
+              currentLat: hasValidDriverGps ? locationState.latitude! : 0.0,
+              currentLng: hasValidDriverGps ? locationState.longitude! : 0.0,
               heading: locationState.heading,
               targetLat: targetLat,
               targetLng: targetLng,
@@ -1027,72 +1030,104 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.access_time_filled_rounded,
-                                size: 15,
-                                color: AppColors.ambulanceTeal,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Dispatched: ${AppDateUtils.formatTime(trip.acceptedAt, includeSeconds: true)}',
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.access_time_filled_rounded,
+                                  size: 15,
+                                  color: AppColors.ambulanceTeal,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Dispatched: ${AppDateUtils.formatTime(trip.acceptedAt, includeSeconds: true)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          Row(
-                            children: [
-                              const Icon(Icons.timer_rounded, size: 14, color: AppColors.statusGreen),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Live: ${AppDateUtils.formatTime(DateTime.now(), includeSeconds: true)}',
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.timer_rounded, size: 14, color: AppColors.statusGreen),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'Live: ${AppDateUtils.formatTime(DateTime.now(), includeSeconds: true)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.statusGreen,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          if (trip.completedAt != null)
+                            Flexible(
+                              child: Text(
+                                'Completed: ${AppDateUtils.formatTime(trip.completedAt!)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: AppColors.statusGreen,
-                                  fontSize: 11.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ],
-                          ),
-                          if (trip.completedAt != null)
-                            Text(
-                              'Completed: ${AppDateUtils.formatTime(trip.completedAt!)}',
-                              style: const TextStyle(
-                                color: AppColors.statusGreen,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
                             )
                           else if (trip.patientPickedUpAt != null)
-                            Text(
-                              'Onboard: ${AppDateUtils.formatTime(trip.patientPickedUpAt!)}',
-                              style: const TextStyle(
-                                color: AppColors.statusGreen,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                'Onboard: ${AppDateUtils.formatTime(trip.patientPickedUpAt!)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.statusGreen,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             )
                           else if (trip.arrivedPickupAt != null)
-                            Text(
-                              'Arrived: ${AppDateUtils.formatTime(trip.arrivedPickupAt!)}',
-                              style: const TextStyle(
-                                color: AppColors.statusGreen,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                'Arrived: ${AppDateUtils.formatTime(trip.arrivedPickupAt!)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.statusGreen,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             )
                           else
-                            Text(
-                              trip.status.displayTitle,
-                              style: const TextStyle(
-                                color: AppColors.ambulanceTeal,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                trip.status.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.ambulanceTeal,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                         ],

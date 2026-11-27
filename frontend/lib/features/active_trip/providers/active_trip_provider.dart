@@ -72,6 +72,7 @@ class ActiveTripNotifier extends StateNotifier<ActiveTripState> {
   StreamSubscription? _reverbDestinationSub;
   StreamSubscription? _reverbChatSub;
   Timer? _activeTripSyncTimer;
+  int _tripStateEpoch = 0;
 
   ActiveTripNotifier(this._repository, this._ref) : super(const ActiveTripState()) {
     checkActiveTrip();
@@ -79,11 +80,14 @@ class ActiveTripNotifier extends StateNotifier<ActiveTripState> {
 
   /// Check if there is an in-flight trip (e.g. app restart or crash recovery)
   Future<void> checkActiveTrip() async {
+    final epoch = ++_tripStateEpoch;
     state = state.copyWith(isLoading: true);
     try {
       final trip = await _repository.getActiveTrip();
+      if (epoch != _tripStateEpoch) return;
       if (trip != null && !trip.status.isFinished) {
         final history = await _repository.getChatMessages(trip.id);
+        if (epoch != _tripStateEpoch) return;
         state = state.copyWith(
           trip: trip,
           isLoading: false,
@@ -100,12 +104,15 @@ class ActiveTripNotifier extends StateNotifier<ActiveTripState> {
         state = state.copyWith(isLoading: false, clearTrip: true);
       }
     } catch (_) {
-      state = state.copyWith(isLoading: false);
+      if (epoch == _tripStateEpoch) {
+        state = state.copyWith(isLoading: false);
+      }
     }
   }
 
   /// Set trip right after accepting a dispatch request
   void setTrip(TripModel trip) {
+    _tripStateEpoch++;
     state = state.copyWith(
       trip: trip,
       isLoading: false,

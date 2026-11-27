@@ -562,11 +562,14 @@ class _IncomingRequestSheetState extends ConsumerState<IncomingRequestSheet>
                           : () async {
                               _timer?.cancel();
                               final nav = Navigator.of(context);
+                              final route = ModalRoute.of(context);
                               final ok = await ref
                                   .read(requestsProvider.notifier)
                                   .acceptRequest(widget.request.id);
-                              if (ok && mounted && nav.canPop()) {
-                                nav.pop();
+                              if (ok && mounted) {
+                                if ((route?.isCurrent ?? false) && nav.canPop()) {
+                                  nav.pop();
+                                }
                               }
                             },
                     ),

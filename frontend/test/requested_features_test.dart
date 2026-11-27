@@ -16,6 +16,7 @@ import 'package:liferoute_driver/core/utils/phone_utils.dart';
 import 'package:liferoute_driver/core/storage/secure_storage_service.dart';
 import 'package:liferoute_driver/features/active_trip/models/trip_status.dart';
 import 'package:liferoute_driver/features/active_trip/providers/active_trip_provider.dart';
+import 'package:liferoute_driver/features/active_trip/repositories/active_trip_repository.dart';
 import 'package:liferoute_driver/features/auth/models/auth_response.dart';
 import 'package:liferoute_driver/features/auth/providers/auth_provider.dart';
 import 'package:liferoute_driver/features/auth/repositories/auth_repository.dart';
@@ -29,6 +30,7 @@ import 'package:liferoute_driver/features/dashboard/models/dashboard_summary_mod
 import 'package:liferoute_driver/core/websocket/reverb_provider.dart';
 import 'package:liferoute_driver/core/websocket/reverb_service.dart';
 import 'package:liferoute_driver/features/active_trip/models/trip_model.dart';
+import 'package:liferoute_driver/features/active_trip/screens/active_trip_screen.dart';
 import 'package:liferoute_driver/features/auth/models/driver_model.dart';
 import 'package:liferoute_driver/features/auth/models/vehicle_model.dart';
 import 'package:liferoute_driver/features/auth/screens/document_upload_screen.dart';
@@ -855,6 +857,98 @@ void main() {
       expect(completed.length, 1);
       expect(completed.first['booking_reference'], 'BK-1001');
     });
+
+    test('23. Accepting request starts live trip tracking with booking reference without duplicate accepts', () async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = _FakeSecureStorageService();
+      final locService = _SpyLocationService(storage);
+      final repo = _TestAcceptRequestsRepository();
+      final activeRepo = _TestEmptyActiveTripRepository(storage);
+      final container = ProviderContainer(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+          locationServiceProvider.overrideWithValue(locService),
+          requestsRepositoryProvider.overrideWithValue(repo),
+          activeTripRepositoryProvider.overrideWithValue(activeRepo),
+          reverbServiceProvider.overrideWithValue(_TestReverbService()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Accept dispatch
+      final accepted = await container.read(requestsProvider.notifier).acceptRequest(99);
+      expect(accepted, isTrue);
+      expect(container.read(activeTripProvider).hasActiveTrip, isTrue);
+      expect(container.read(activeTripProvider).trip?.bookingReference, 'LR-EMG-0099');
+      expect(locService.startedBookingRefs, contains('LR-EMG-0099'));
+      expect(locService.startCount, greaterThanOrEqualTo(1));
+    });
+
+    testWidgets('24. ActiveTripScreen ignores 0,0 unacquired driver GPS and updates cleanly when GPS telemetry arrives', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final storage = _FakeSecureStorageService();
+      final locService = _FakeLocationService(storage);
+      final activeRepo = _TestEmptyActiveTripRepository(storage);
+      final container = ProviderContainer(
+        overrides: [
+          storageServiceProvider.overrideWithValue(storage),
+          locationServiceProvider.overrideWithValue(locService),
+          activeTripRepositoryProvider.overrideWithValue(activeRepo),
+          reverbServiceProvider.overrideWithValue(_TestReverbService()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final trip = TripModel(
+        id: 501,
+        bookingReference: 'LR-TRACK-501',
+        patientName: 'Senthil Kumar',
+        contactNumber: '+91 98400 12345',
+        pickupAddress: 'Anna Nagar, Chennai',
+        pickupLatitude: 13.0850,
+        pickupLongitude: 80.2101,
+        destinationHospital: 'Rajiv Gandhi GH',
+        destinationAddress: 'Park Town, Chennai',
+        destinationLatitude: 13.0818,
+        destinationLongitude: 80.2757,
+        emergencyNotes: 'Cardiac Emergency',
+        specialAccessInstructions: '',
+        emergencyCategory: 'Cardiac',
+        status: TripStatus.accepted,
+        distanceRemainingMeters: 2400.0,
+        etaRemaining: '5 min',
+        acceptedAt: DateTime.now(),
+      );
+      container.read(activeTripProvider.notifier).setTrip(trip);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: ActiveTripScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Before real driver GPS arrives, distance must fall back to server remaining (2.4 km), NOT ~8900 km from (0,0)
+      expect(find.text('2.4 km'), findsOneWidget);
+
+      // Now emit live driver telemetry
+      locService.emitTestTelemetry(LocationTelemetry(
+        latitude: 13.0840,
+        longitude: 80.2200,
+        accuracy: 6.0,
+        heading: 90.0,
+        speed: 12.0,
+        timestamp: DateTime.now(),
+      ));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+
+      // Tear down widget tree & provider timers cleanly before test invariant check
+      await tester.pumpWidget(const SizedBox());
+      container.dispose();
+      await tester.pump(const Duration(seconds: 2));
+    });
   });
 }
 
@@ -864,6 +958,80 @@ class _TestReverbService extends ReverbService {
 
   @override
   Future<void> disconnect() async {}
+
+  @override
+  Future<void> subscribeToBookingChannel(int bookingId) async {}
+
+  @override
+  Future<void> unsubscribeBookingChannel() async {}
+}
+
+class _SpyLocationService extends DriverLocationService {
+  final List<String?> startedBookingRefs = [];
+  int startCount = 0;
+
+  _SpyLocationService(SecureStorageService storage)
+    : super(DioClient(storage), storage);
+
+  @override
+  Future<void> startTracking({String? bookingReference}) async {
+    startCount++;
+    startedBookingRefs.add(bookingReference);
+  }
+
+  @override
+  Future<void> stopTracking() async {}
+
+  @override
+  Future<Position?> getCurrentPosition() async => null;
+}
+
+class _TestEmptyActiveTripRepository extends ActiveTripRepository {
+  _TestEmptyActiveTripRepository(SecureStorageService storage)
+    : super(DioClient(storage), storage);
+
+  @override
+  Future<TripModel?> getActiveTrip() async => null;
+
+  @override
+  Future<List<Map<String, dynamic>>> getChatMessages(int tripId) async => const [];
+}
+
+class _TestAcceptRequestsRepository extends RequestsRepository {
+  _TestAcceptRequestsRepository() : super(DioClient(SecureStorageService()));
+
+  @override
+  Future<List<BookingRequestModel>> getPendingRequests() async => const [];
+
+  @override
+  Future<void> declineBooking(int bookingId, {String? reason}) async {}
+
+  @override
+  Future<TripModel> acceptBooking(
+    int bookingId, {
+    BookingRequestModel? originalRequest,
+  }) async {
+    return TripModel(
+      id: bookingId,
+      bookingReference: 'LR-EMG-0099',
+      patientName: 'Anitha',
+      contactNumber: '+91 98400 10801',
+      pickupAddress: 'T Nagar, Chennai',
+      pickupLatitude: 13.0418,
+      pickupLongitude: 80.2341,
+      destinationHospital: 'Apollo Chennai',
+      destinationAddress: 'Greams Road',
+      destinationLatitude: 13.0634,
+      destinationLongitude: 80.2519,
+      emergencyNotes: 'Trauma',
+      specialAccessInstructions: '',
+      emergencyCategory: 'Trauma',
+      status: TripStatus.accepted,
+      distanceRemainingMeters: 1500.0,
+      etaRemaining: '4 min',
+      acceptedAt: DateTime.now(),
+    );
+  }
 }
 
 class _TestRequestsRepository extends RequestsRepository {

@@ -692,6 +692,8 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                       ),
                       ElevatedButton(
                         onPressed: () {
+                          if (_isRequestSheetOpen) return;
+                          _isRequestSheetOpen = true;
                           final req =
                               requestsState.currentIncomingRequest ??
                               requestsState.pendingRequests.first;
@@ -702,7 +704,9 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen>
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             builder: (_) => IncomingRequestSheet(request: req),
-                          );
+                          ).whenComplete(() {
+                            _isRequestSheetOpen = false;
+                          });
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.alertOrange,

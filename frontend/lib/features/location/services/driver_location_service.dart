@@ -37,7 +37,10 @@ class DriverLocationService {
   Timer? _staleGpsTimer;
   Timer? _heartbeatTimer;
   DateTime? _lastPingTime;
+  DateTime? _lastGpsSampleTime;
   bool _isTelemetryInFlight = false;
+  bool _isHeartbeatSampling = false;
+  int _trackingEpoch = 0;
   Position? _currentPosition;
   String? _activeBookingReference;
 
@@ -46,7 +49,7 @@ class DriverLocationService {
       _telemetryController.stream;
 
   Position? get currentPosition => _currentPosition;
-  bool get isTracking => _positionSubscription != null;
+  bool get isTracking => _positionSubscription != null || _heartbeatTimer != null;
 
   DriverLocationService(this._dioClient, this._storageService);
 
@@ -130,10 +133,24 @@ class DriverLocationService {
       return;
     }
 
-    final hasPermission = await checkAndRequestPermissions();
-    if (!hasPermission) return;
+    // Fast-path when GPS stream & heartbeat are already alive: attach active booking without teardown
+    if (isTracking && _heartbeatTimer != null) {
+      _activeBookingReference = bookingReference ?? _activeBookingReference;
+      _resetStaleTimer();
+      if (_currentPosition != null) {
+        unawaited(_emitPosition(_currentPosition!, forceNetworkSync: true));
+      } else {
+        unawaited(_sampleInitialFix(_trackingEpoch));
+      }
+      return;
+    }
 
-    await stopTracking(); // Stop prior tracking before setting active booking reference
+    final int epoch = ++_trackingEpoch;
+    final hasPermission = await checkAndRequestPermissions();
+    if (!hasPermission || epoch != _trackingEpoch) return;
+
+    await _teardownTrackingStreams(clearBookingRef: false);
+    if (epoch != _trackingEpoch) return;
     _activeBookingReference = bookingReference;
 
     // High accuracy, 3m movement filter with Android Foreground Service notification for locked-screen/background GPS
@@ -160,36 +177,61 @@ class DriverLocationService {
 
     _resetStaleTimer();
 
-    _positionSubscription =
-        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-          (Position position) {
-            _emitPosition(position);
-          },
-          onError: (e) {
-            debugPrint('[LocationService] Position stream error: $e');
-          },
-        );
-
-    // Immediately broadcast an initial GPS fix without waiting for physical movement
-    final initialPos = await getCurrentPosition();
-    if (initialPos != null && isTracking) {
-      await _emitPosition(initialPos, forceNetworkSync: true);
+    try {
+      _positionSubscription =
+          Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+            (Position position) {
+              _emitPosition(position);
+            },
+            onError: (e) {
+              debugPrint('[LocationService] Position stream error: $e');
+            },
+          );
+    } catch (e) {
+      debugPrint('[LocationService] Position stream setup failed: $e');
     }
 
-    // Periodic 4-second telemetry heartbeat keeps live map & ETA syncing even while parked
+    // Immediately broadcast cached fix if present, and start non-overlapping heartbeat right away
+    if (_currentPosition != null) {
+      unawaited(_emitPosition(_currentPosition!, forceNetworkSync: true));
+    }
+
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      if (!isTracking) return;
-      final pos =
-          await _acquireBestPosition(
-            highTimeout: const Duration(seconds: 3),
-            fallbackTimeout: const Duration(seconds: 2),
-          ) ??
-          _currentPosition;
-      if (pos != null && isTracking) {
-        await _emitPosition(pos);
+      if (epoch != _trackingEpoch) return;
+      if (!isTracking && _heartbeatTimer == null) return;
+      if (_isHeartbeatSampling) return;
+      _isHeartbeatSampling = true;
+      try {
+        final gpsAgeMs = _lastGpsSampleTime == null
+            ? 999999
+            : DateTime.now().difference(_lastGpsSampleTime!).inMilliseconds;
+        Position? pos = _currentPosition;
+        // Sample fresh GPS only if cached fix is missing or older than 4 seconds
+        if (pos == null || gpsAgeMs >= 4000) {
+          pos = await _acquireBestPosition(
+                highTimeout: const Duration(seconds: 3),
+                fallbackTimeout: const Duration(seconds: 2),
+              ) ??
+              _currentPosition;
+        }
+        if (pos != null && epoch == _trackingEpoch) {
+          await _emitPosition(pos);
+        }
+      } finally {
+        _isHeartbeatSampling = false;
       }
     });
+
+    // Fetch fresh initial GPS asynchronously without blocking caller or delaying heartbeat setup
+    unawaited(_sampleInitialFix(epoch));
+  }
+
+  Future<void> _sampleInitialFix(int epoch) async {
+    final initialPos = await getCurrentPosition();
+    if (initialPos != null && epoch == _trackingEpoch && _heartbeatTimer != null) {
+      await _emitPosition(initialPos, forceNetworkSync: true);
+    }
   }
 
   Future<void> _emitPosition(
@@ -197,6 +239,7 @@ class DriverLocationService {
     bool forceNetworkSync = false,
   }) async {
     _currentPosition = position;
+    _lastGpsSampleTime = DateTime.now();
     _resetStaleTimer();
 
     final telemetry = LocationTelemetry(
@@ -271,15 +314,22 @@ class DriverLocationService {
     });
   }
 
-  /// Stop tracking immediately when trip completes or driver goes offline
-  Future<void> stopTracking() async {
+  Future<void> _teardownTrackingStreams({bool clearBookingRef = true}) async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _staleGpsTimer?.cancel();
     _staleGpsTimer = null;
-    _activeBookingReference = null;
+    if (clearBookingRef) {
+      _activeBookingReference = null;
+    }
+  }
+
+  /// Stop tracking immediately when trip completes or driver goes offline
+  Future<void> stopTracking() async {
+    _trackingEpoch++;
+    await _teardownTrackingStreams(clearBookingRef: true);
   }
 
   void dispose() {

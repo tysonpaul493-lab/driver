@@ -56,10 +56,13 @@ class TripMapView extends StatefulWidget {
 
 class _TripMapViewState extends State<TripMapView> {
   final MapController _mapController = MapController();
+  bool _isMapReady = false;
   double _currentZoom = 15.5;
   double _mapRotation = 0.0;
   bool _autoFollow = true;
   List<ll.LatLng> _routePoints = [];
+
+  bool get _hasValidDriverCoord => _isValidCoord(widget.currentLat, widget.currentLng);
 
   @override
   void initState() {
@@ -70,10 +73,15 @@ class _TripMapViewState extends State<TripMapView> {
   @override
   void didUpdateWidget(covariant TripMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_autoFollow &&
+    final wasValidDriver = _isValidCoord(oldWidget.currentLat, oldWidget.currentLng);
+    final nowValidDriver = _hasValidDriverCoord;
+
+    if (nowValidDriver &&
+        _isMapReady &&
+        (_autoFollow || !wasValidDriver) &&
         (oldWidget.currentLat != widget.currentLat ||
             oldWidget.currentLng != widget.currentLng)) {
-      // Smoothly update map center when driver moves unless user manually panned away
+      // Smoothly update map center when driver moves or gets initial GPS fix
       try {
         _mapController.move(
           ll.LatLng(widget.currentLat, widget.currentLng),
@@ -82,8 +90,10 @@ class _TripMapViewState extends State<TripMapView> {
       } catch (_) {}
     }
 
-    if (oldWidget.targetLat != widget.targetLat ||
+    if ((!wasValidDriver && nowValidDriver) ||
+        oldWidget.targetLat != widget.targetLat ||
         oldWidget.targetLng != widget.targetLng ||
+        (_routePoints.isEmpty && nowValidDriver && _isValidCoord(widget.targetLat, widget.targetLng)) ||
         (oldWidget.currentLat - widget.currentLat).abs() > 0.002 ||
         (oldWidget.currentLng - widget.currentLng).abs() > 0.002) {
       _fetchRoadRoute();
@@ -131,42 +141,46 @@ class _TripMapViewState extends State<TripMapView> {
       'https://routing.openstreetmap.de/routed-car/route/v1/driving',
     ];
 
-    for (final mirror in mirrors) {
-      try {
-        final url =
-            '$mirror/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson';
-        final response = await dio.get(url);
-        if (response.statusCode == 200 && response.data is Map) {
-          final routes = response.data['routes'] as List?;
-          if (routes != null && routes.isNotEmpty) {
-            final geometry = routes[0]['geometry'];
-            final coords = geometry?['coordinates'] as List?;
-            final apiDistMeters = (routes[0]['distance'] as num?)?.toDouble();
-            if (coords != null && coords.isNotEmpty) {
-              final points = coords
-                  .whereType<List>()
-                  .where((c) => c.length >= 2)
-                  .map(
-                    (c) => ll.LatLng(
-                      (c[1] as num).toDouble(),
-                      (c[0] as num).toDouble(),
-                    ),
-                  )
-                  .toList();
-              if (mounted && points.length >= 2) {
-                setState(() => _routePoints = points);
-                final roadMeters = (apiDistMeters != null && apiDistMeters > 0)
-                    ? apiDistMeters
-                    : DistanceUtils.calculatePolylineMeters(
-                        points.map((p) => (lat: p.latitude, lng: p.longitude)).toList(),
-                      );
-                widget.onRouteDistanceUpdated?.call(roadMeters);
-                return;
+    try {
+      for (final mirror in mirrors) {
+        try {
+          final url =
+              '$mirror/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson';
+          final response = await dio.get(url);
+          if (response.statusCode == 200 && response.data is Map) {
+            final routes = response.data['routes'] as List?;
+            if (routes != null && routes.isNotEmpty) {
+              final geometry = routes[0]['geometry'];
+              final coords = geometry?['coordinates'] as List?;
+              final apiDistMeters = (routes[0]['distance'] as num?)?.toDouble();
+              if (coords != null && coords.isNotEmpty) {
+                final points = coords
+                    .whereType<List>()
+                    .where((c) => c.length >= 2)
+                    .map(
+                      (c) => ll.LatLng(
+                        (c[1] as num).toDouble(),
+                        (c[0] as num).toDouble(),
+                      ),
+                    )
+                    .toList();
+                if (mounted && points.length >= 2) {
+                  setState(() => _routePoints = points);
+                  final roadMeters = (apiDistMeters != null && apiDistMeters > 0)
+                      ? apiDistMeters
+                      : DistanceUtils.calculatePolylineMeters(
+                          points.map((p) => (lat: p.latitude, lng: p.longitude)).toList(),
+                        );
+                  widget.onRouteDistanceUpdated?.call(roadMeters);
+                  return;
+                }
               }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
+    } finally {
+      dio.close();
     }
 
     if (mounted) {
@@ -187,11 +201,14 @@ class _TripMapViewState extends State<TripMapView> {
   void _recenterOnDriver() {
     _autoFollow = true;
     _currentZoom = 16.5;
+    final target = _hasValidDriverCoord
+        ? ll.LatLng(widget.currentLat, widget.currentLng)
+        : (_isValidCoord(widget.targetLat, widget.targetLng)
+              ? ll.LatLng(widget.targetLat, widget.targetLng)
+              : null);
+    if (target == null) return;
     try {
-      _mapController.move(
-        ll.LatLng(widget.currentLat, widget.currentLng),
-        _currentZoom,
-      );
+      _mapController.move(target, _currentZoom);
     } catch (_) {}
     widget.onRecenter?.call();
   }
@@ -199,15 +216,22 @@ class _TripMapViewState extends State<TripMapView> {
   void _fitRouteBounds() {
     _autoFollow = false;
     try {
-      final points = <ll.LatLng>[
-        ll.LatLng(widget.currentLat, widget.currentLng),
-        ll.LatLng(widget.targetLat, widget.targetLng),
+      final rawPoints = <ll.LatLng>[
+        if (_hasValidDriverCoord) ll.LatLng(widget.currentLat, widget.currentLng),
+        if (_isValidCoord(widget.targetLat, widget.targetLng))
+          ll.LatLng(widget.targetLat, widget.targetLng),
+        if (widget.hospitalLat != null && widget.hospitalLng != null)
+          ll.LatLng(widget.hospitalLat!, widget.hospitalLng!),
+        if (widget.pickupLat != null && widget.pickupLng != null)
+          ll.LatLng(widget.pickupLat!, widget.pickupLng!),
       ];
-      if (widget.hospitalLat != null && widget.hospitalLng != null) {
-        points.add(ll.LatLng(widget.hospitalLat!, widget.hospitalLng!));
-      }
-      if (widget.pickupLat != null && widget.pickupLng != null) {
-        points.add(ll.LatLng(widget.pickupLat!, widget.pickupLng!));
+      final points = rawPoints
+          .where((p) => _isValidCoord(p.latitude, p.longitude))
+          .toList();
+      if (points.isEmpty) return;
+      if (points.length == 1) {
+        _mapController.move(points.first, 15.5);
+        return;
       }
 
       double south = points.first.latitude;
@@ -238,64 +262,74 @@ class _TripMapViewState extends State<TripMapView> {
     final driverPoint = ll.LatLng(widget.currentLat, widget.currentLng);
     final targetPoint = ll.LatLng(widget.targetLat, widget.targetLng);
 
-    final pickupPoint = (widget.pickupLat != null && widget.pickupLng != null)
+    final pickupPoint = (widget.pickupLat != null &&
+            widget.pickupLng != null &&
+            _isValidCoord(widget.pickupLat!, widget.pickupLng!))
         ? ll.LatLng(widget.pickupLat!, widget.pickupLng!)
-        : (!widget.isHeadingToHospital ? targetPoint : null);
+        : (!widget.isHeadingToHospital &&
+                _isValidCoord(widget.targetLat, widget.targetLng)
+            ? targetPoint
+            : null);
 
-    final hospitalPoint =
-        (widget.hospitalLat != null && widget.hospitalLng != null)
+    final hospitalPoint = (widget.hospitalLat != null &&
+            widget.hospitalLng != null &&
+            _isValidCoord(widget.hospitalLat!, widget.hospitalLng!))
         ? ll.LatLng(widget.hospitalLat!, widget.hospitalLng!)
-        : (widget.isHeadingToHospital ? targetPoint : null);
+        : (widget.isHeadingToHospital &&
+                _isValidCoord(widget.targetLat, widget.targetLng)
+            ? targetPoint
+            : null);
 
     final markers = <Marker>[
-      // 1. Driver Ambulance Live Marker (Google Maps Navigation Puck & Heading)
-      Marker(
-        point: driverPoint,
-        width: 68,
-        height: 68,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Concentric halo ring
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0x334285F4),
-                border: Border.all(color: Colors.white, width: 2),
+      // 1. Driver Ambulance Live Marker (only shown once valid GPS coordinate is available)
+      if (_hasValidDriverCoord)
+        Marker(
+          point: driverPoint,
+          width: 68,
+          height: 68,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Concentric halo ring
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0x334285F4),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
               ),
-            ),
-            // Core navigation puck
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-                border: Border.all(color: const Color(0xFF1A73E8), width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF1A73E8).withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Transform.rotate(
-                  angle: (widget.heading * math.pi / 180),
-                  child: const Icon(
-                    Icons.navigation_rounded,
-                    color: Color(0xFF1A73E8),
-                    size: 24,
+              // Core navigation puck
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFF1A73E8), width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1A73E8).withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Transform.rotate(
+                    angle: (widget.heading * math.pi / 180),
+                    child: const Icon(
+                      Icons.navigation_rounded,
+                      color: Color(0xFF1A73E8),
+                      size: 24,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
     ];
 
     // 2. Patient Pickup Location Marker (Red Pin with Badge)
@@ -303,7 +337,7 @@ class _TripMapViewState extends State<TripMapView> {
       markers.add(
         Marker(
           point: pickupPoint,
-          width: 140,
+          width: 170,
           height: 64,
           alignment: Alignment.topCenter,
           child: Column(
@@ -332,12 +366,16 @@ class _TripMapViewState extends State<TripMapView> {
                       color: AppColors.emergencyRed,
                     ),
                     SizedBox(width: 4),
-                    Text(
-                      'Patient Pickup',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.emergencyRed,
+                    Flexible(
+                      child: Text(
+                        'Patient Pickup',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.emergencyRed,
+                        ),
                       ),
                     ),
                   ],
@@ -460,9 +498,26 @@ class _TripMapViewState extends State<TripMapView> {
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: driverPoint,
+            initialCenter: _hasValidDriverCoord
+                ? driverPoint
+                : (_isValidCoord(targetPoint.latitude, targetPoint.longitude)
+                      ? targetPoint
+                      : const ll.LatLng(0.0, 0.0)),
             initialZoom: _currentZoom,
             initialRotation: _mapRotation,
+            onMapReady: () {
+              if (!mounted) return;
+              setState(() => _isMapReady = true);
+              if (_hasValidDriverCoord) {
+                try {
+                  _mapController.move(driverPoint, _currentZoom);
+                } catch (_) {}
+              } else if (_isValidCoord(targetPoint.latitude, targetPoint.longitude)) {
+                try {
+                  _mapController.move(targetPoint, _currentZoom);
+                } catch (_) {}
+              }
+            },
             minZoom: 4.0,
             maxZoom: 19.0,
             interactionOptions: const InteractionOptions(
@@ -489,46 +544,50 @@ class _TripMapViewState extends State<TripMapView> {
             ),
 
             // High-Accuracy GPS Precision Circle around Ambulance
-            CircleLayer(
-              circles: [
-                CircleMarker(
-                  point: driverPoint,
-                  radius: widget.accuracy.clamp(12.0, 45.0),
-                  useRadiusInMeter: false,
-                  color: const Color(0x224285F4),
-                  borderColor: const Color(0xFF4285F4),
-                  borderStrokeWidth: 1.5,
-                ),
-              ],
-            ),
+            if (_hasValidDriverCoord)
+              CircleLayer(
+                circles: [
+                  CircleMarker(
+                    point: driverPoint,
+                    radius: widget.accuracy.clamp(12.0, 45.0),
+                    useRadiusInMeter: false,
+                    color: const Color(0x224285F4),
+                    borderColor: const Color(0xFF4285F4),
+                    borderStrokeWidth: 1.5,
+                  ),
+                ],
+              ),
 
             // Emergency Road Pathway Polyline (Google Maps Navigation Style)
-            PolylineLayer(
-              polylines: [
-                // Glowing route underlay casing
-                Polyline(
-                  points: _routePoints.isNotEmpty
-                      ? _routePoints
-                      : [driverPoint, targetPoint],
-                  strokeWidth: 9.0,
-                  color:
-                      (widget.isHeadingToHospital
-                              ? AppColors.statusGreen
-                              : const Color(0xFF4285F4))
-                          .withValues(alpha: 0.35),
-                ),
-                // Route core line
-                Polyline(
-                  points: _routePoints.isNotEmpty
-                      ? _routePoints
-                      : [driverPoint, targetPoint],
-                  strokeWidth: 5.5,
-                  color: widget.isHeadingToHospital
-                      ? AppColors.statusGreen
-                      : const Color(0xFF1A73E8),
-                ),
-              ],
-            ),
+            if (_routePoints.isNotEmpty ||
+                (_hasValidDriverCoord &&
+                    _isValidCoord(targetPoint.latitude, targetPoint.longitude)))
+              PolylineLayer(
+                polylines: [
+                  // Glowing route underlay casing
+                  Polyline(
+                    points: _routePoints.isNotEmpty
+                        ? _routePoints
+                        : [driverPoint, targetPoint],
+                    strokeWidth: 9.0,
+                    color:
+                        (widget.isHeadingToHospital
+                                ? AppColors.statusGreen
+                                : const Color(0xFF4285F4))
+                            .withValues(alpha: 0.35),
+                  ),
+                  // Route core line
+                  Polyline(
+                    points: _routePoints.isNotEmpty
+                        ? _routePoints
+                        : [driverPoint, targetPoint],
+                    strokeWidth: 5.5,
+                    color: widget.isHeadingToHospital
+                        ? AppColors.statusGreen
+                        : const Color(0xFF1A73E8),
+                  ),
+                ],
+              ),
 
             // Markers Layer
             MarkerLayer(markers: markers),
